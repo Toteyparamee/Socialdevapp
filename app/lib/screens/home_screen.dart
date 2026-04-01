@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../models/problem_report.dart';
-import 'map_home_screen.dart';
+import 'map_screen.dart';
 import 'problem_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,11 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: const [
-          MapHomeScreen(),
-          _ActivityTab(),
-          _ProfileTab(),
-        ],
+        children: const [MapHomeScreen(), _ActivityTab(), _ProfileTab()],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -201,13 +197,20 @@ class _ProblemCard extends StatelessWidget {
             // Info
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Icon(_categoryIcon, size: 16, color: AppTheme.textSecondary),
+                        Icon(
+                          _categoryIcon,
+                          size: 16,
+                          color: AppTheme.textSecondary,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -235,7 +238,10 @@ class _ProblemCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: _statusColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
@@ -297,7 +303,8 @@ class _ActivityTab extends StatelessWidget {
             date: '5 เม.ย. 2569',
             time: '08:00 - 12:00 น.',
             location: 'บริเวณรอบโรงเรียน',
-            description: 'กิจกรรมทำความสะอาดครั้งใหญ่ ร่วมกันเก็บขยะและปรับปรุงภูมิทัศน์รอบโรงเรียน',
+            description:
+                'กิจกรรมทำความสะอาดครั้งใหญ่ ร่วมกันเก็บขยะและปรับปรุงภูมิทัศน์รอบโรงเรียน',
             icon: Icons.cleaning_services_rounded,
             color: Colors.green,
             tag: 'อาสาสมัคร',
@@ -307,7 +314,8 @@ class _ActivityTab extends StatelessWidget {
             date: '8 เม.ย. 2569',
             time: '15:00 - 16:30 น.',
             location: 'ห้องประชุม อาคาร 3',
-            description: 'หารือปัญหาในโรงเรียนและติดตามผลการแก้ไขปัญหาที่แจ้งไว้',
+            description:
+                'หารือปัญหาในโรงเรียนและติดตามผลการแก้ไขปัญหาที่แจ้งไว้',
             icon: Icons.groups_rounded,
             color: Colors.blue,
             tag: 'ประชุม',
@@ -317,7 +325,8 @@ class _ActivityTab extends StatelessWidget {
             date: '12 เม.ย. 2569',
             time: '09:00 - 15:00 น.',
             location: 'สนามฟุตบอล',
-            description: 'โครงการซ่อมแซมสนามกีฬาที่ชำรุด โดยความร่วมมือของนักเรียนและชุมชน',
+            description:
+                'โครงการซ่อมแซมสนามกีฬาที่ชำรุด โดยความร่วมมือของนักเรียนและชุมชน',
             icon: Icons.construction_rounded,
             color: Colors.orange,
             tag: 'โครงการ',
@@ -327,7 +336,8 @@ class _ActivityTab extends StatelessWidget {
             date: '15 เม.ย. 2569',
             time: '08:30 - 11:30 น.',
             location: 'หอประชุมโรงเรียน',
-            description: 'กิจกรรมให้ความรู้เรื่องการลดขยะและคัดแยกขยะอย่างถูกวิธี',
+            description:
+                'กิจกรรมให้ความรู้เรื่องการลดขยะและคัดแยกขยะอย่างถูกวิธี',
             icon: Icons.recycling_rounded,
             color: Colors.teal,
             tag: 'สิ่งแวดล้อม',
@@ -337,7 +347,8 @@ class _ActivityTab extends StatelessWidget {
             date: '20 เม.ย. 2569',
             time: '10:00 - 14:00 น.',
             location: 'อาคารเรียนทุกหลัง',
-            description: 'สำรวจปัญหาโครงสร้างอาคาร ระบบไฟฟ้า และประปา เพื่อส่งซ่อมบำรุง',
+            description:
+                'สำรวจปัญหาโครงสร้างอาคาร ระบบไฟฟ้า และประปา เพื่อส่งซ่อมบำรุง',
             icon: Icons.domain_rounded,
             color: Colors.deepPurple,
             tag: 'สำรวจ',
@@ -386,7 +397,9 @@ class _ActivityCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.06),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(14),
+              ),
             ),
             child: Row(
               children: [
@@ -424,7 +437,10 @@ class _ActivityCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
@@ -458,8 +474,11 @@ class _ActivityCard extends StatelessWidget {
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    const Icon(Icons.location_on_outlined,
-                        size: 15, color: AppTheme.textSecondary),
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 15,
+                      color: AppTheme.textSecondary,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       location,
@@ -505,7 +524,11 @@ class _ProfileTab extends StatelessWidget {
             child: CircleAvatar(
               radius: 44,
               backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
-              child: const Icon(Icons.person, size: 44, color: AppTheme.primary),
+              child: const Icon(
+                Icons.person,
+                size: 44,
+                color: AppTheme.primary,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -595,11 +618,12 @@ class _ProfileTab extends StatelessWidget {
             color: AppTheme.textPrimary,
           ),
         ),
-        trailing: const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
-        onTap: onTap,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+        trailing: const Icon(
+          Icons.chevron_right,
+          color: AppTheme.textSecondary,
         ),
+        onTap: onTap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
