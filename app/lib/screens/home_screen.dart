@@ -288,7 +288,7 @@ class _ActivityTab extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTheme.inputBg,
       appBar: AppBar(
-        title: const Text('กิจกรรมในโรงเรียน'),
+        title: const Text('หน้าหลัก'),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,

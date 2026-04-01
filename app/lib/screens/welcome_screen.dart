@@ -82,7 +82,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   void _goToLogin() {
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, __, ___) => const LoginScreen(),
         transitionDuration: const Duration(milliseconds: 500),
