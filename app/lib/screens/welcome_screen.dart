@@ -22,33 +22,37 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     _PageData(
       icon: Icons.map_rounded,
       secondaryIcon: Icons.location_on_rounded,
-      title: 'แจ้งปัญหาชุมชน',
-      subtitle: 'Community Problem Report',
-      description: 'แพลตฟอร์มสำหรับแจ้งปัญหาในชุมชน\nให้ทุกคนมีส่วนร่วมพัฒนาท้องถิ่น',
+      title: 'รู้ทันปัญหาในชุมชน',
+      subtitle: 'Discover Local Issues',
+      description:
+          'เข้าถึงข้อมูลปัญหาและความต้องการของชุมชน\nผ่านแผนที่แบบ Real-time',
       gradient: [Color(0xFF4A90D9), Color(0xFF7C5CE0)],
     ),
     _PageData(
       icon: Icons.campaign_rounded,
       secondaryIcon: Icons.edit_location_alt_rounded,
-      title: 'รายงานปัญหาง่ายๆ',
-      subtitle: 'Report Problems Easily',
-      description: 'ถ่ายรูป ปักหมุด แจ้งปัญหาได้ทันที\nระบุตำแหน่งผ่านแผนที่อัตโนมัติ',
+      title: 'รับโจทย์จริงจากภาครัฐ',
+      subtitle: 'Real Challenges, Real Impact',
+      description:
+          'ข่าวสารและโจทย์จากหน่วยงานภาครัฐ\nพร้อมให้คนรุ่นใหม่ลงมือแก้ไข',
       gradient: [Color(0xFF3B82F6), Color(0xFF06B6D4)],
     ),
     _PageData(
       icon: Icons.track_changes_rounded,
       secondaryIcon: Icons.verified_rounded,
-      title: 'ติดตามสถานะ',
-      subtitle: 'Track Progress',
-      description: 'ติดตามความคืบหน้าแบบเรียลไทม์\nตั้งแต่รับแจ้ง กำลังดำเนินการ จนแก้ไขเสร็จ',
+      title: 'ลงมือทำ สร้าง Skill จริง',
+      subtitle: 'Learn by Doing',
+      description:
+          'เปลี่ยนปัญหาเป็นโปรเจกต์\nพัฒนาทักษะผ่านการลงมือแก้ปัญหาจริง',
       gradient: [Color(0xFF10B981), Color(0xFF059669)],
     ),
     _PageData(
       icon: Icons.people_alt_rounded,
       secondaryIcon: Icons.volunteer_activism_rounded,
-      title: 'ร่วมมือกัน',
-      subtitle: 'Work Together',
-      description: 'นักเรียน ครู และชุมชน ร่วมมือกัน\nสร้างสังคมที่ดีขึ้นไปด้วยกัน',
+      title: 'คนรุ่นใหม่ คือพลังของชาติ',
+      subtitle: 'Together We Grow',
+      description:
+          'นักเรียน ครู และชุมชน ร่วมมือกัน\nสร้างการเปลี่ยนแปลงที่ยิ่งใหญ่ไปด้วยกัน',
       gradient: [Color(0xFFA78BFA), Color(0xFFEC4899)],
     ),
   ];
@@ -88,7 +92,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         transitionDuration: const Duration(milliseconds: 500),
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(
-            opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeInOut,
+            ),
             child: child,
           );
         },
@@ -122,11 +129,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   gradient: LinearGradient(
                     begin: Alignment(
                       math.cos(_bgAnimController.value * 2 * math.pi) * 0.5,
-                      math.sin(_bgAnimController.value * 2 * math.pi) * 0.5 - 0.5,
+                      math.sin(_bgAnimController.value * 2 * math.pi) * 0.5 -
+                          0.5,
                     ),
                     end: Alignment(
                       math.sin(_bgAnimController.value * 2 * math.pi) * 0.5,
-                      math.cos(_bgAnimController.value * 2 * math.pi) * 0.5 + 0.5,
+                      math.cos(_bgAnimController.value * 2 * math.pi) * 0.5 +
+                          0.5,
                     ),
                     colors: page.gradient,
                   ),
@@ -215,7 +224,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(
-                                      alpha: 0.1 + _pulseController.value * 0.05,
+                                      alpha:
+                                          0.1 + _pulseController.value * 0.05,
                                     ),
                                     blurRadius: 20 + _pulseController.value * 8,
                                     offset: const Offset(0, 6),
@@ -295,11 +305,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       shape: BoxShape.circle,
                       color: Colors.white.withValues(alpha: 0.15),
                     ),
-                    child: Icon(
-                      page.icon,
-                      size: 64,
-                      color: Colors.white,
-                    ),
+                    child: Icon(page.icon, size: 64, color: Colors.white),
                   ),
                   // Secondary floating icon
                   Positioned(
@@ -462,19 +468,13 @@ class _FloatingCircle extends StatelessWidget {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, child) {
-        final val = reverse
-            ? 1.0 - animation.value
-            : animation.value;
+        final val = reverse ? 1.0 - animation.value : animation.value;
         return Positioned(
-          left: left != null
-              ? left! + math.sin(val * 2 * math.pi) * 20
-              : null,
+          left: left != null ? left! + math.sin(val * 2 * math.pi) * 20 : null,
           right: right != null
               ? right! + math.cos(val * 2 * math.pi) * 15
               : null,
-          top: top != null
-              ? top! + math.cos(val * 2 * math.pi) * 20
-              : null,
+          top: top != null ? top! + math.cos(val * 2 * math.pi) * 20 : null,
           bottom: bottom != null
               ? bottom! + math.sin(val * 2 * math.pi) * 15
               : null,
