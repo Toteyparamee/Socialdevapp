@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
+import 'register_screen.dart' as reg;
 
 enum UserRole { student, teacher, general }
 
@@ -129,7 +130,10 @@ class _LoginScreenState extends State<LoginScreen>
     // Mock credentials
     const mockAccounts = {
       UserRole.student: {'username': '65012345', 'password': '1234'},
-      UserRole.teacher: {'username': 'teacher@school.ac.th', 'password': '1234'},
+      UserRole.teacher: {
+        'username': 'teacher@school.ac.th',
+        'password': '1234',
+      },
       UserRole.general: {'username': '0812345678', 'password': '1234'},
     };
 
@@ -150,9 +154,9 @@ class _LoginScreenState extends State<LoginScreen>
     };
 
     await context.read<AuthService>().login(
-          username: _usernameController.text,
-          role: roleName,
-        );
+      username: _usernameController.text,
+      role: roleName,
+    );
 
     if (!mounted) return;
     setState(() => _isLoading = false);
@@ -170,10 +174,7 @@ class _LoginScreenState extends State<LoginScreen>
           controller: _pageController,
           physics: const NeverScrollableScrollPhysics(),
           onPageChanged: (i) => setState(() => _currentPage = i),
-          children: [
-            _buildRolePage(),
-            _buildLoginPage(),
-          ],
+          children: [_buildRolePage(), _buildLoginPage()],
         ),
       ),
     );
@@ -286,10 +287,9 @@ class _LoginScreenState extends State<LoginScreen>
           curve: Curves.easeOutCubic,
         );
         final slide = Tween<double>(begin: 30.0, end: 0.0)
-            .animate(CurvedAnimation(
-              parent: _entranceController,
-              curve: interval,
-            ))
+            .animate(
+              CurvedAnimation(parent: _entranceController, curve: interval),
+            )
             .value;
         final opacity = CurvedAnimation(
           parent: _entranceController,
@@ -406,8 +406,10 @@ class _LoginScreenState extends State<LoginScreen>
                 const SizedBox(height: 8),
                 // Role chip
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.primary.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(20),
@@ -438,8 +440,8 @@ class _LoginScreenState extends State<LoginScreen>
                     _selectedRole == UserRole.student
                         ? 'รหัสนักเรียน'
                         : _selectedRole == UserRole.teacher
-                            ? 'อีเมล'
-                            : 'เบอร์โทร / อีเมล',
+                        ? 'อีเมล'
+                        : 'เบอร์โทร / อีเมล',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -474,11 +476,15 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppTheme.primary, width: 1.5),
+                        borderSide: BorderSide(
+                          color: AppTheme.primary,
+                          width: 1.5,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
                       helperText: _helperText,
                       helperStyle: TextStyle(
                         color: Colors.grey.shade400,
@@ -523,11 +529,15 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppTheme.primary, width: 1.5),
+                        borderSide: BorderSide(
+                          color: AppTheme.primary,
+                          width: 1.5,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword
@@ -536,8 +546,9 @@ class _LoginScreenState extends State<LoginScreen>
                           color: Colors.grey.shade400,
                           size: 20,
                         ),
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
                       ),
                     ),
                     validator: (v) {
@@ -553,7 +564,9 @@ class _LoginScreenState extends State<LoginScreen>
                       onPressed: () {},
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 8),
+                          horizontal: 4,
+                          vertical: 8,
+                        ),
                       ),
                       child: Text(
                         'ลืมรหัสผ่าน?',
@@ -649,7 +662,7 @@ class _LoginScreenState extends State<LoginScreen>
                   // Google sign in
                   GestureDetector(
                     onTap: () {
-                      // TODO: implement Google sign in
+                      // implement Google sign in
                     },
                     child: Container(
                       width: double.infinity,
@@ -665,9 +678,7 @@ class _LoginScreenState extends State<LoginScreen>
                           SizedBox(
                             width: 20,
                             height: 20,
-                            child: CustomPaint(
-                              painter: _GoogleLogoPainter(),
-                            ),
+                            child: CustomPaint(painter: _GoogleLogoPainter()),
                           ),
                           const SizedBox(width: 12),
                           const Text(
@@ -696,7 +707,20 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                         ),
                         GestureDetector(
-                          onTap: () {},
+                          onTap: () {
+                            final role = switch (_selectedRole) {
+                              UserRole.student => reg.UserRole.student,
+                              UserRole.teacher => reg.UserRole.teacher,
+                              UserRole.general => reg.UserRole.general,
+                              null => null,
+                            };
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    reg.RegisterScreen(initialRole: role),
+                              ),
+                            );
+                          },
                           child: const Text(
                             'สมัครสมาชิก',
                             style: TextStyle(
@@ -752,9 +776,7 @@ class _LoginScreenState extends State<LoginScreen>
           width: isActive ? 24 : 8,
           height: 8,
           decoration: BoxDecoration(
-            color: isActive
-                ? const Color(0xFF1A1A2E)
-                : const Color(0xFFE0E0E0),
+            color: isActive ? const Color(0xFF1A1A2E) : const Color(0xFFE0E0E0),
             borderRadius: BorderRadius.circular(4),
           ),
         );

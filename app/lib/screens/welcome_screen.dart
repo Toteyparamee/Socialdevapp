@@ -20,8 +20,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   final _pages = const [
     _PageData(
-      icon: Icons.map_rounded,
-      secondaryIcon: Icons.location_on_rounded,
+      imagePath: 'photo/w1.PNG',
       title: 'รู้ทันปัญหาในชุมชน',
       subtitle: 'Discover Local Issues',
       description:
@@ -29,8 +28,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       gradient: [Color(0xFF4A90D9), Color(0xFF7C5CE0)],
     ),
     _PageData(
-      icon: Icons.campaign_rounded,
-      secondaryIcon: Icons.edit_location_alt_rounded,
+      imagePath: 'photo/w2.PNG',
       title: 'รับโจทย์จริงจากภาครัฐ',
       subtitle: 'Real Challenges, Real Impact',
       description:
@@ -285,82 +283,91 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             },
             child: SizedBox(
               height: 220,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Background circle
-                  Container(
-                    width: 180,
-                    height: 180,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.12),
-                    ),
-                  ),
-                  // Inner circle
-                  Container(
-                    width: 130,
-                    height: 130,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.15),
-                    ),
-                    child: Icon(page.icon, size: 64, color: Colors.white),
-                  ),
-                  // Secondary floating icon
-                  Positioned(
-                    right: 40,
-                    top: 20,
-                    child: AnimatedBuilder(
-                      animation: _floatingController,
-                      builder: (context, child) {
-                        return Transform.translate(
-                          offset: Offset(
-                            _floatingController.value * 6 - 3,
-                            -_floatingController.value * 8 + 4,
+              child: page.imagePath != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Image.asset(
+                        page.imagePath!,
+                        height: 220,
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                  : Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Background circle
+                        Container(
+                          width: 180,
+                          height: 180,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.12),
                           ),
-                          child: child,
-                        );
-                      },
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Icon(
-                          page.secondaryIcon,
-                          size: 26,
-                          color: Colors.white.withValues(alpha: 0.9),
+                        // Inner circle
+                        Container(
+                          width: 130,
+                          height: 130,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.15),
+                          ),
+                          child: Icon(page.icon, size: 64, color: Colors.white),
                         ),
-                      ),
+                        // Secondary floating icon
+                        Positioned(
+                          right: 40,
+                          top: 20,
+                          child: AnimatedBuilder(
+                            animation: _floatingController,
+                            builder: (context, child) {
+                              return Transform.translate(
+                                offset: Offset(
+                                  _floatingController.value * 6 - 3,
+                                  -_floatingController.value * 8 + 4,
+                                ),
+                                child: child,
+                              );
+                            },
+                            child: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Icon(
+                                page.secondaryIcon,
+                                size: 26,
+                                color: Colors.white.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Small decorative dot
+                        Positioned(
+                          left: 50,
+                          bottom: 30,
+                          child: AnimatedBuilder(
+                            animation: _pulseController,
+                            builder: (context, child) {
+                              return Transform.scale(
+                                scale: 0.8 + _pulseController.value * 0.4,
+                                child: child,
+                              );
+                            },
+                            child: Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.3),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  // Small decorative dot
-                  Positioned(
-                    left: 50,
-                    bottom: 30,
-                    child: AnimatedBuilder(
-                      animation: _pulseController,
-                      builder: (context, child) {
-                        return Transform.scale(
-                          scale: 0.8 + _pulseController.value * 0.4,
-                          child: child,
-                        );
-                      },
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.3),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
           const SizedBox(height: 40),
@@ -493,16 +500,18 @@ class _FloatingCircle extends StatelessWidget {
 }
 
 class _PageData {
-  final IconData icon;
-  final IconData secondaryIcon;
+  final IconData? icon;
+  final IconData? secondaryIcon;
+  final String? imagePath;
   final String title;
   final String subtitle;
   final String description;
   final List<Color> gradient;
 
   const _PageData({
-    required this.icon,
-    required this.secondaryIcon,
+    this.icon,
+    this.secondaryIcon,
+    this.imagePath,
     required this.title,
     required this.subtitle,
     required this.description,

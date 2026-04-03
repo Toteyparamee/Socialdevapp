@@ -130,3 +130,6 @@ lib/
 ```
 
 **รวมทั้งหมด: 12 ไฟล์ .dart**
+widget  (class ปู่)
+  └─ StatefulWidget  (class แม่ - อยู่ใน Flutter framework)
+       └─ LoginScreen  (class ลูก - อยู่ในไฟล์นี้ บรรทัด 10)
