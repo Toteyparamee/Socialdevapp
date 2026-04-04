@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import 'map_screen.dart';
+import 'school_activities_screen.dart';
 
 class StudentScreen extends StatefulWidget {
   const StudentScreen({super.key});
@@ -150,33 +151,8 @@ class _HomeTabState extends State<_HomeTab> {
     ),
     _MenuData(
       icon: Icons.event_rounded,
-      label: 'กิจกรรม',
-      color: Color(0xFF3B82F6),
-    ),
-    _MenuData(
-      icon: Icons.menu_book_rounded,
-      label: 'ตารางเรียน',
-      color: Color(0xFF8B5CF6),
-    ),
-    _MenuData(
-      icon: Icons.grade_rounded,
-      label: 'ผลการเรียน',
-      color: Color(0xFFF59E0B),
-    ),
-    _MenuData(
-      icon: Icons.payments_rounded,
-      label: 'ค่าเทอม',
-      color: Color(0xFF10B981),
-    ),
-    _MenuData(
-      icon: Icons.local_library_rounded,
-      label: 'ห้องสมุด',
-      color: Color(0xFF6366F1),
-    ),
-    _MenuData(
-      icon: Icons.restaurant_rounded,
-      label: 'โรงอาหาร',
-      color: Color(0xFFF97316),
+      label: 'กิจกรรมโรงเรียน',
+      color: Color.fromARGB(255, 107, 166, 255),
     ),
     _MenuData(
       icon: Icons.more_horiz_rounded,
@@ -365,7 +341,7 @@ class _HomeTabState extends State<_HomeTab> {
 
               const SizedBox(height: 24),
 
-              // ── เมนูลัด (grid 4x2) ──
+              // ── เมนูลัด (grid 4x2, horizontal page scroll) ──
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Container(
@@ -384,49 +360,73 @@ class _HomeTabState extends State<_HomeTab> {
                       ),
                     ],
                   ),
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          mainAxisSpacing: 16,
-                          crossAxisSpacing: 8,
-                          childAspectRatio: 0.85,
-                        ),
-                    itemCount: _menus.length,
-                    itemBuilder: (context, i) {
-                      final m = _menus[i];
-                      return GestureDetector(
-                        onTap: () {},
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                color: m.color.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(14),
+                  child: SizedBox(
+                    height: 180,
+                    child: PageView.builder(
+                      itemCount: (_menus.length / 8).ceil(),
+                      itemBuilder: (context, page) {
+                        final start = page * 8;
+                        final end = (start + 8).clamp(0, _menus.length);
+                        final pageMenus = _menus.sublist(start, end);
+                        return GridView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 4,
+                                mainAxisSpacing: 20,
+                                crossAxisSpacing: 20,
+                                childAspectRatio: 0.85,
                               ),
-                              child: Icon(m.icon, color: m.color, size: 26),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              m.label,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: AppTheme.textPrimary,
+                          itemCount: pageMenus.length,
+                          itemBuilder: (context, i) {
+                            final m = pageMenus[i];
+                            return GestureDetector(
+                              onTap: () {
+                                if (m.label == 'กิจกรรมโรงเรียน') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const SchoolActivitiesScreen(),
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 50,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      color: m.color.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Icon(
+                                      m.icon,
+                                      color: m.color,
+                                      size: 26,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    m.label,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
