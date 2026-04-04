@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import '../../theme/app_theme.dart';
 
 class SchoolActivitiesScreen extends StatelessWidget {
   const SchoolActivitiesScreen({super.key});
@@ -183,8 +183,9 @@ class _ActivityCard extends StatelessWidget {
           children: [
             // Image
             ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
               child: Image.network(
                 activity.image,
                 height: 140,
@@ -194,8 +195,11 @@ class _ActivityCard extends StatelessWidget {
                   height: 140,
                   color: AppTheme.inputBg,
                   child: const Center(
-                    child: Icon(Icons.image_outlined,
-                        size: 40, color: AppTheme.textSecondary),
+                    child: Icon(
+                      Icons.image_outlined,
+                      size: 40,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -207,8 +211,10 @@ class _ActivityCard extends StatelessWidget {
                 children: [
                   // Category chip
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: activity.categoryColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
@@ -236,8 +242,11 @@ class _ActivityCard extends StatelessWidget {
                   // Date & location
                   Row(
                     children: [
-                      Icon(Icons.calendar_today_rounded,
-                          size: 14, color: AppTheme.textSecondary),
+                      Icon(
+                        Icons.calendar_today_rounded,
+                        size: 14,
+                        color: AppTheme.textSecondary,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         activity.date,
@@ -247,8 +256,11 @@ class _ActivityCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 16),
-                      Icon(Icons.location_on_outlined,
-                          size: 14, color: AppTheme.textSecondary),
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: 14,
+                        color: AppTheme.textSecondary,
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -307,8 +319,11 @@ class _ActivityDetailScreen extends StatelessWidget {
                 errorBuilder: (_, __, ___) => Container(
                   color: AppTheme.inputBg,
                   child: const Center(
-                    child: Icon(Icons.image_outlined,
-                        size: 48, color: AppTheme.textSecondary),
+                    child: Icon(
+                      Icons.image_outlined,
+                      size: 48,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -325,10 +340,11 @@ class _ActivityDetailScreen extends StatelessWidget {
                   // Category chip
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
-                      color:
-                          activity.categoryColor.withValues(alpha: 0.1),
+                      color: activity.categoryColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(

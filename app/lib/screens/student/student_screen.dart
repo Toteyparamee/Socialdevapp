@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../theme/app_theme.dart';
-import '../services/auth_service.dart';
-import 'map_screen.dart';
+import '../../theme/app_theme.dart';
+import '../../services/auth_service.dart';
+import '../map_screen.dart';
 import 'school_activities_screen.dart';
 
 class StudentScreen extends StatefulWidget {

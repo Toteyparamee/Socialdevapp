@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'services/auth_service.dart';
 import 'screens/welcome_screen.dart';
-import 'screens/student_screen.dart';
+import 'screens/student/student_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
