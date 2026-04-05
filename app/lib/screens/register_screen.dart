@@ -65,7 +65,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   String get _usernameLabel {
     return switch (_selectedRole ?? UserRole.student) {
-      UserRole.student => 'รหัสนักเรียน',
+      UserRole.student => 'Gmail',
       UserRole.teacher => 'อีเมล',
       UserRole.general => 'เบอร์โทร หรือ อีเมล',
     };
@@ -73,9 +73,9 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   String get _usernameHint {
     return switch (_selectedRole ?? UserRole.student) {
-      UserRole.student => 'ตัวอย่าง: 65012345',
-      UserRole.teacher => 'teacher@school.ac.th',
-      UserRole.general => '0812345678',
+      UserRole.student => '@gmail.com หรือ @.ac.th',
+      UserRole.teacher => '@gmail.com หรือ @.ac.th',
+      UserRole.general => '@gmail.com',
     };
   }
 
@@ -316,20 +316,14 @@ class _RegisterScreenState extends State<RegisterScreen>
             const SizedBox(height: 8),
             TextFormField(
               controller: _usernameController,
-              keyboardType: _selectedRole == UserRole.student
-                  ? TextInputType.number
-                  : TextInputType.emailAddress,
-              inputFormatters: _selectedRole == UserRole.student
-                  ? [FilteringTextInputFormatter.digitsOnly]
-                  : null,
+              keyboardType: TextInputType.emailAddress,
               style: const TextStyle(fontSize: 16, color: Color(0xFF1A1A2E)),
               decoration: _inputDecoration(hintText: _usernameHint),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'กรุณากรอกข้อมูล';
-                if (_selectedRole == UserRole.student && v.length < 5) {
-                  return 'รหัสนักเรียนต้องมีอย่างน้อย 5 หลัก';
-                }
-                if (_selectedRole == UserRole.teacher && !v.contains('@')) {
+                if ((_selectedRole == UserRole.student ||
+                        _selectedRole == UserRole.teacher) &&
+                    !v.contains('@')) {
                   return 'กรุณากรอกอีเมลที่ถูกต้อง';
                 }
                 return null;

@@ -96,14 +96,14 @@ class _LoginScreenState extends State<LoginScreen>
 
   String get _usernameHint {
     return switch (_selectedRole ?? UserRole.student) {
-      UserRole.student => 'รหัสนักเรียน',
+      UserRole.student => 'Gmail',
       UserRole.teacher => 'อีเมล',
       UserRole.general => 'เบอร์โทร หรือ อีเมล',
     };
   }
 
   String? get _helperText {
-    if (_selectedRole == UserRole.student) return 'ตัวอย่าง: 65012345';
+    if (_selectedRole == UserRole.student) return '@gmail.com หรือ @.ac.th';
     return null;
   }
 
@@ -124,45 +124,43 @@ class _LoginScreenState extends State<LoginScreen>
       _errorMessage = null;
     });
 
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-
-    // Mock credentials
-    const mockAccounts = {
-      UserRole.student: {'username': '65012345', 'password': '1234'},
-      UserRole.teacher: {
-        'username': 'teacher@school.ac.th',
-        'password': '1234',
-      },
-      UserRole.general: {'username': '0812345678', 'password': '1234'},
-    };
-
-    final mock = mockAccounts[_selectedRole]!;
-    if (_usernameController.text != mock['username'] ||
-        _passwordController.text != mock['password']) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
-      });
-      return;
+    try {
+      await context.read<AuthService>().login(
+        username: _usernameController.text,
+        password: _passwordController.text,
+        role: _roleLabel,
+      );
+      if (mounted) Navigator.of(context).pop();
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _errorMessage = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _errorMessage = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
 
-    final roleName = switch (_selectedRole!) {
-      UserRole.student => 'student',
-      UserRole.teacher => 'teacher',
-      UserRole.general => 'general',
-    };
+  Future<void> _handleGoogleLogin() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-    await context.read<AuthService>().login(
-      username: _usernameController.text,
-      role: roleName,
-    );
-
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    // Pop LoginScreen so AuthGate rebuilds to HomeScreen
-    if (mounted) Navigator.of(context).pop();
+    try {
+      await context.read<AuthService>().loginWithGoogle(role: _roleLabel);
+      if (mounted) Navigator.of(context).pop();
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _errorMessage = e.message);
+    } catch (e) {
+      debugPrint('[GoogleLogin] error: $e');
+      if (mounted) {
+        setState(() => _errorMessage = 'Google login ไม่สำเร็จ: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -438,7 +436,7 @@ class _LoginScreenState extends State<LoginScreen>
                   // Username label
                   Text(
                     _selectedRole == UserRole.student
-                        ? 'รหัสนักเรียน'
+                        ? 'Gmail'
                         : _selectedRole == UserRole.teacher
                         ? 'อีเมล'
                         : 'เบอร์โทร / อีเมล',
@@ -451,12 +449,7 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _usernameController,
-                    keyboardType: _selectedRole == UserRole.student
-                        ? TextInputType.number
-                        : TextInputType.emailAddress,
-                    inputFormatters: _selectedRole == UserRole.student
-                        ? [FilteringTextInputFormatter.digitsOnly]
-                        : null,
+                    keyboardType: TextInputType.emailAddress,
                     style: const TextStyle(
                       fontSize: 16,
                       color: Color(0xFF1A1A2E),
@@ -661,9 +654,7 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 20),
                   // Google sign in
                   GestureDetector(
-                    onTap: () {
-                      // implement Google sign in
-                    },
+                    onTap: _isLoading ? null : _handleGoogleLogin,
                     child: Container(
                       width: double.infinity,
                       height: 54,

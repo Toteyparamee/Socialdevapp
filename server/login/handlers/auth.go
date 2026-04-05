@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -132,7 +133,8 @@ func GoogleLogin(c fiber.Ctx) error {
 	auth0Cfg := config.LoadAuth0Config()
 	userInfo, err := getAuth0UserInfo(auth0Cfg.Domain, req.AccessToken)
 	if err != nil {
-		return c.Status(401).JSON(fiber.Map{"error": "Invalid Google token"})
+		log.Printf("[GoogleLogin] Auth0 userinfo error: %v", err)
+		return c.Status(401).JSON(fiber.Map{"error": "Invalid Google token", "detail": err.Error()})
 	}
 
 	// Find or create user

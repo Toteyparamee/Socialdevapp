@@ -12,16 +12,17 @@ main.dart
 
 ---
 
-## Screens (6 ไฟล์)
+## Screens (7 ไฟล์)
 
 | ไฟล์ | Widget | หน้าที่ |
 |------|--------|---------|
 | `welcome_screen.dart` | `WelcomeScreen` | Onboarding carousel 4 หน้า |
-| `login_screen.dart` | `LoginScreen` | เลือก role + ฟอร์ม login |
-| `home_screen.dart` | `HomeScreen` | หน้าหลัก + Bottom Navigation 3 แท็บ |
+| `login_screen.dart` | `LoginScreen` | เลือก role + ฟอร์ม login (นักเรียนใช้ Gmail) + Login with Google |
+| `register_screen.dart` | `RegisterScreen` | สมัครสมาชิก |
 | `map_screen.dart` | `MapHomeScreen` | Google Maps + markers ปัญหาชุมชน |
 | `problem_detail_screen.dart` | `ProblemDetailScreen` | รายละเอียดปัญหา |
-| `school_activities_screen.dart` | `SchoolActivitiesScreen` | รายการกิจกรรมโรงเรียน + หน้ารายละเอียดกิจกรรม |
+| `student/student_screen.dart` | `StudentScreen` | Dashboard นักเรียน + Bottom Navigation |
+| `student/school_activities_screen.dart` | `SchoolActivitiesScreen` | รายการกิจกรรมโรงเรียน + หน้ารายละเอียดกิจกรรม |
 
 ---
 
@@ -41,9 +42,13 @@ main.dart
 
 **`services/auth_service.dart`**
 
-- `AuthService` (ChangeNotifier) - จัดการ login/logout
-- เก็บ session ใน SharedPreferences
-- Properties: isLoggedIn, username, role, isLoading
+- `AuthService` (ChangeNotifier) - จัดการ login/logout เชื่อมต่อ Backend API
+- `login()` - POST /auth/login (username + password)
+- `register()` - POST /auth/register (username + email + password + role)
+- `loginWithGoogle()` - Auth0 + POST /auth/google (access_token)
+- `AuthException` - custom exception class
+- เก็บ session ใน SharedPreferences (token, username, role, avatarUrl)
+- Properties: isLoggedIn, username, role, token, avatarUrl, isLoading, authHeaders
 
 ---
 
@@ -73,8 +78,8 @@ WelcomeScreen (onboarding 4 หน้า)
   └─ [ข้าม / ถัดไป]
      └─ LoginScreen
         ├─ Page 1: เลือก Role (นักเรียน / ครู / ทั่วไป)
-        └─ Page 2: กรอก Username + Password
-           └─ HomeScreen
+        └─ Page 2: กรอก Gmail + Password (นักเรียน) / อีเมล (ครู) / เบอร์โทรหรืออีเมล (ทั่วไป) | Login with Google (Auth0)
+           └─ StudentScreen (Dashboard นักเรียน)
               ├─ Tab 0: MapHomeScreen (แผนที่)
               │  ├─ แตะ marker → ProblemBottomSheet
               │  │  └─ ดูเพิ่ม → ProblemDetailScreen
@@ -88,11 +93,24 @@ WelcomeScreen (onboarding 4 หน้า)
 
 ---
 
+## Auth Config (Flutter ↔ Auth0 ↔ Backend)
+
+| ค่า | ที่อยู่ |
+|-----|--------|
+| Auth0 Domain | `dev-p6m40iaxhz0i543y.us.auth0.com` |
+| Auth0 Client ID | `tiHEUCuLCaE03SyInMkyRVLPgxZopy7s` |
+| Redirect URI | `com.socialdev.app://login-callback` |
+| Backend URL | `http://10.0.2.2:8080` (Android) / `http://localhost:8080` (iOS) |
+| Android config | `build.gradle.kts` → `appAuthRedirectScheme` |
+| iOS config | `Info.plist` → `CFBundleURLSchemes` |
+
+---
+
 ## State Management
 
 - **Provider**: `AuthService` (ChangeNotifier) - สถานะ login ทั้งแอป
 - **Local State**: StatefulWidget + setState() - UI state ภายใน screen
-- **Persistence**: SharedPreferences - เก็บ session
+- **Persistence**: SharedPreferences - เก็บ session + JWT token
 
 ---
 
@@ -105,7 +123,8 @@ WelcomeScreen (onboarding 4 หน้า)
 | `geolocator` | ตำแหน่งปัจจุบัน |
 | `shared_preferences` | เก็บ session |
 | `image_picker` | เลือกรูปจากกล้อง/แกลเลอรี |
-| `http` | โหลดรูป marker |
+| `http` | HTTP client เรียก Backend API |
+| `flutter_appauth` | Auth0 / Google OAuth login |
 
 ---
 
@@ -119,10 +138,12 @@ lib/
 ├── screens/
 │   ├── welcome_screen.dart
 │   ├── login_screen.dart
-│   ├── home_screen.dart
+│   ├── register_screen.dart
 │   ├── map_screen.dart
 │   ├── problem_detail_screen.dart
-│   └── school_activities_screen.dart
+│   └── student/
+│       ├── student_screen.dart
+│       └── school_activities_screen.dart
 ├── services/
 │   └── auth_service.dart
 ├── theme/
@@ -133,7 +154,7 @@ lib/
     └── add_problem_sheet.dart
 ```
 
-**รวมทั้งหมด: 13 ไฟล์ .dart**
+**รวมทั้งหมด: 14 ไฟล์ .dart**
 
 ---
 
@@ -240,3 +261,34 @@ Flutter → POST /auth/google → Server verify กับ Auth0 /userinfo
 | `gorm.io/driver/sqlite` | SQLite database |
 | `golang.org/x/crypto` | bcrypt hash password |
 | `joho/godotenv` | Load .env file |
+
+---
+
+# Database Schema (PostgreSQL)
+
+**`server/schema/schema.sql`**
+
+## Tables
+
+| Table | หน้าที่ |
+|-------|---------|
+| `users` | ข้อมูลผู้ใช้ (username, email, password, role, provider, google_id, avatar_url) |
+| `problem_reports` | รายงานปัญหาชุมชน + PostGIS location |
+| `problem_images` | รูปภาพปัญหา (1 ปัญหามีได้หลายรูป) |
+| `school_activities` | กิจกรรมโรงเรียน |
+| `activity_registrations` | ลงทะเบียนกิจกรรม (user ↔ activity) |
+
+## Enum Types
+
+| Type | ค่า |
+|------|-----|
+| `user_role` | นักเรียน, ครู, ทั่วไป |
+| `auth_provider` | local, google |
+| `problem_category` | flood, trash, traffic, infrastructure, other |
+| `problem_status` | pending, in_progress, resolved |
+| `problem_source` | user, government, urgent |
+
+## Extensions
+
+- `uuid-ossp` - สร้าง UUID
+- `postgis` - รองรับ location (lat/lng)

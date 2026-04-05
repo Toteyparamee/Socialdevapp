@@ -30,6 +30,11 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Auth0 / flutter_appauth v7 required placeholders
+        manifestPlaceholders["appAuthRedirectScheme"] = "com.socialdev.app"
+        manifestPlaceholders["auth0Domain"] = "dev-p6m40iaxhz0i543y.us.auth0.com"
+        manifestPlaceholders["auth0Scheme"] = "https"
     }
 
     buildTypes {
