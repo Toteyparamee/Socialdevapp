@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 
 enum UserRole { student, teacher, general }
@@ -79,6 +81,14 @@ class _RegisterScreenState extends State<RegisterScreen>
     };
   }
 
+  String get _roleName {
+    return switch (_selectedRole ?? UserRole.student) {
+      UserRole.student => 'นักเรียน',
+      UserRole.teacher => 'ครู',
+      UserRole.general => 'ทั่วไป',
+    };
+  }
+
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -93,18 +103,38 @@ class _RegisterScreenState extends State<RegisterScreen>
       _successMessage = null;
     });
 
-    // Mock registration delay
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (!mounted) return;
+    try {
+      final authService = context.read<AuthService>();
+      await authService.register(
+        username: _nameController.text.trim(),
+        email: _usernameController.text.trim(),
+        password: _passwordController.text,
+        role: _roleName,
+      );
 
-    setState(() {
-      _isLoading = false;
-      _successMessage = 'สมัครสมาชิกสำเร็จ!';
-    });
+      if (!mounted) return;
 
-    // Navigate back to login after success
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (mounted) Navigator.of(context).pop();
+      setState(() {
+        _isLoading = false;
+        _successMessage = 'สมัครสมาชิกสำเร็จ!';
+      });
+
+      // Auto login - pop all routes back to AuthGate which will show Dashboard
+      await Future.delayed(const Duration(milliseconds: 1200));
+      if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่';
+      });
+    }
   }
 
   @override

@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"login-service/config"
-	"login-service/models"
 	"login-service/routes"
 
 	"github.com/gofiber/fiber/v3"
@@ -20,12 +19,6 @@ func main() {
 
 	// Connect database
 	config.ConnectDatabase()
-
-	// Auto migrate
-	if err := models.MigrateDB(config.DB); err != nil {
-		log.Fatal("Failed to migrate database:", err)
-	}
-
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
 		AppName: "Login Service",

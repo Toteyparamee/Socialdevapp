@@ -126,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       await context.read<AuthService>().login(
-        username: _usernameController.text,
+        email: _usernameController.text.trim(),
         password: _passwordController.text,
         role: _roleLabel,
       );

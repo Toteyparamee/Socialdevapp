@@ -26,7 +26,7 @@ type RegisterRequest struct {
 }
 
 type LoginRequest struct {
-	Username string `json:"username"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
@@ -97,17 +97,19 @@ func Login(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	if req.Username == "" || req.Password == "" {
-		return c.Status(400).JSON(fiber.Map{"error": "username and password are required"})
+	if req.Email == "" || req.Password == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "email and password are required"})
 	}
 
+	log.Printf("[Login] email=%q password_len=%d", req.Email, len(req.Password))
+
 	var user models.User
-	if result := config.DB.Where("username = ? AND provider = ?", req.Username, "local").First(&user); result.Error != nil {
-		return c.Status(401).JSON(fiber.Map{"error": "Invalid username or password"})
+	if result := config.DB.Where("email = ? AND provider::text = ?", req.Email, "local").First(&user); result.Error != nil {
+		return c.Status(401).JSON(fiber.Map{"error": "ไม่พบบัญชีนี้ กรุณาสมัครสมาชิก"})
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		return c.Status(401).JSON(fiber.Map{"error": "Invalid username or password"})
+		return c.Status(401).JSON(fiber.Map{"error": "รหัสผ่านไม่ถูกต้อง"})
 	}
 
 	token, err := generateJWT(user)

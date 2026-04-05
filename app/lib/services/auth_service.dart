@@ -78,7 +78,7 @@ class AuthService extends ChangeNotifier {
 
   // ── Login ธรรมดา (username + password) ──
   Future<void> login({
-    required String username,
+    required String email,
     required String password,
     required String role,
   }) async {
@@ -86,7 +86,7 @@ class AuthService extends ChangeNotifier {
         .post(
           Uri.parse('$_baseUrl/auth/login'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'username': username, 'password': password}),
+          body: jsonEncode({'email': email, 'password': password}),
         )
         .timeout(_timeout);
 
