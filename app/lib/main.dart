@@ -5,6 +5,7 @@ import 'theme/app_theme.dart';
 import 'services/auth_service.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/student/student_screen.dart';
+import 'screens/teacher/teacher_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +46,10 @@ class AuthGate extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    return auth.isLoggedIn ? const StudentScreen() : const WelcomeScreen();
+    return switch (auth) {
+      _ when !auth.isLoggedIn => const WelcomeScreen(),
+      _ when auth.role == 'ครู' => const TeacherScreen(),
+      _ => const StudentScreen(),
+    };
   }
 }
