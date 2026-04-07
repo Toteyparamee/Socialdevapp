@@ -112,24 +112,26 @@ class _TicketListScreenState extends State<TicketListScreen>
   }
 
   Color _statusColor(TicketStatus s) => switch (s) {
-        TicketStatus.open => const Color(0xFF10B981),
-        TicketStatus.inProgress => const Color(0xFFFBBF24),
-        TicketStatus.closed => const Color(0xFF9CA3AF),
-      };
+    TicketStatus.open => const Color(0xFF10B981),
+    TicketStatus.inProgress => const Color(0xFFFBBF24),
+    TicketStatus.closed => const Color(0xFF9CA3AF),
+  };
 
   String _statusLabel(TicketStatus s) => switch (s) {
-        TicketStatus.open => 'เปิด',
-        TicketStatus.inProgress => 'กำลังดำเนินการ',
-        TicketStatus.closed => 'ปิดแล้ว',
-      };
+    TicketStatus.open => 'เปิด',
+    TicketStatus.inProgress => 'กำลังดำเนินการ',
+    TicketStatus.closed => 'ปิดแล้ว',
+  };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FB),
       appBar: AppBar(
-        title: const Text('แชท',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        title: const Text(
+          'แชท',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+        ),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,
@@ -143,8 +145,8 @@ class _TicketListScreenState extends State<TicketListScreen>
       body: _isLoading
           ? _buildSkeleton()
           : _tickets.isEmpty
-              ? _buildEmptyState()
-              : _buildTicketList(),
+          ? _buildEmptyState()
+          : _buildTicketList(),
     );
   }
 
@@ -196,7 +198,10 @@ class _TicketListScreenState extends State<TicketListScreen>
       width: w,
       decoration: BoxDecoration(
         color: Color.lerp(
-            const Color(0xFFE8ECF0), const Color(0xFFF3F4F6), shimmerOpacity * 10),
+          const Color(0xFFE8ECF0),
+          const Color(0xFFF3F4F6),
+          shimmerOpacity * 10,
+        ),
         borderRadius: isCircle ? null : BorderRadius.circular(6),
         shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
       ),
@@ -216,8 +221,11 @@ class _TicketListScreenState extends State<TicketListScreen>
               color: AppTheme.primary.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.chat_bubble_outline_rounded,
-                size: 40, color: AppTheme.primary),
+            child: Icon(
+              Icons.chat_bubble_outline_rounded,
+              size: 40,
+              color: AppTheme.primary,
+            ),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -263,7 +271,6 @@ class _TicketListScreenState extends State<TicketListScreen>
       },
     );
   }
-
 }
 
 // ── Ticket Tile Widget ──
@@ -292,7 +299,9 @@ class _TicketTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: ticket.unread > 0
               ? Border.all(
-                  color: AppTheme.primary.withValues(alpha: 0.2), width: 1)
+                  color: AppTheme.primary.withValues(alpha: 0.2),
+                  width: 1,
+                )
               : null,
           boxShadow: [
             BoxShadow(
@@ -394,7 +403,9 @@ class _TicketTile extends StatelessWidget {
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.primary,
                             borderRadius: BorderRadius.circular(10),
@@ -524,11 +535,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     if (text.isEmpty) return;
 
     setState(() {
-      _messages.add(_ChatMessage(
-        text: text,
-        isMe: true,
-        time: TimeOfDay.now().format(context),
-      ));
+      _messages.add(
+        _ChatMessage(
+          text: text,
+          isMe: true,
+          time: TimeOfDay.now().format(context),
+        ),
+      );
       _textController.clear();
     });
 
@@ -545,16 +558,16 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   }
 
   Color _statusColor(TicketStatus s) => switch (s) {
-        TicketStatus.open => const Color(0xFF10B981),
-        TicketStatus.inProgress => const Color(0xFFFBBF24),
-        TicketStatus.closed => const Color(0xFF9CA3AF),
-      };
+    TicketStatus.open => const Color(0xFF10B981),
+    TicketStatus.inProgress => const Color(0xFFFBBF24),
+    TicketStatus.closed => const Color(0xFF9CA3AF),
+  };
 
   String _statusLabel(TicketStatus s) => switch (s) {
-        TicketStatus.open => 'เปิด',
-        TicketStatus.inProgress => 'กำลังดำเนินการ',
-        TicketStatus.closed => 'ปิดแล้ว',
-      };
+    TicketStatus.open => 'เปิด',
+    TicketStatus.inProgress => 'กำลังดำเนินการ',
+    TicketStatus.closed => 'ปิดแล้ว',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -649,8 +662,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             color: AppTheme.primary.withValues(alpha: 0.06),
             child: Row(
               children: [
-                Icon(Icons.label_rounded,
-                    size: 16, color: AppTheme.primary),
+                Icon(Icons.label_rounded, size: 16, color: AppTheme.primary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -677,8 +689,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
               itemBuilder: (context, index) {
                 final msg = _messages[index];
                 final prevMsg = index > 0 ? _messages[index - 1] : null;
-                final showTime =
-                    prevMsg == null || prevMsg.isMe != msg.isMe;
+                final showTime = prevMsg == null || prevMsg.isMe != msg.isMe;
 
                 return _MessageBubble(
                   message: msg,
@@ -699,9 +710,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             ),
             decoration: const BoxDecoration(
               color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Color(0xFFF0F0F0)),
-              ),
+              border: Border(top: BorderSide(color: Color(0xFFF0F0F0))),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -716,8 +725,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       color: const Color(0xFFF3F4F6),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(Icons.image_rounded,
-                        size: 22, color: Color(0xFF9CA3AF)),
+                    child: const Icon(
+                      Icons.image_rounded,
+                      size: 22,
+                      color: Color(0xFF9CA3AF),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -735,14 +747,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       maxLines: null,
                       textInputAction: TextInputAction.newline,
                       style: const TextStyle(
-                          fontSize: 15, color: AppTheme.textPrimary),
+                        fontSize: 15,
+                        color: AppTheme.textPrimary,
+                      ),
                       decoration: InputDecoration(
                         hintText: 'พิมพ์ข้อความ...',
                         hintStyle: TextStyle(
-                            color: Colors.grey.shade400, fontSize: 15),
+                          color: Colors.grey.shade400,
+                          fontSize: 15,
+                        ),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                       ),
                     ),
                   ),
@@ -767,8 +785,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.send_rounded,
-                          size: 19, color: Colors.white),
+                      child: const Icon(
+                        Icons.send_rounded,
+                        size: 19,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -810,15 +831,17 @@ class _MessageBubbleState extends State<_MessageBubble>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: Offset(widget.message.isMe ? 0.3 : -0.3, 0),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _slideController, curve: Curves.easeOut),
-    );
+    _slideAnimation =
+        Tween<Offset>(
+          begin: Offset(widget.message.isMe ? 0.3 : -0.3, 0),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+        );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
     _slideController.forward();
   }
 
@@ -844,8 +867,9 @@ class _MessageBubbleState extends State<_MessageBubble>
             right: isMe ? 0 : 48,
           ),
           child: Column(
-            crossAxisAlignment:
-                isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment: isMe
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
             children: [
               // Sender label
               if (widget.showTime && !isMe)
@@ -877,8 +901,11 @@ class _MessageBubbleState extends State<_MessageBubble>
                         color: const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Icon(Icons.broken_image_rounded,
-                          size: 40, color: Color(0xFFD1D5DB)),
+                      child: const Icon(
+                        Icons.broken_image_rounded,
+                        size: 40,
+                        color: Color(0xFFD1D5DB),
+                      ),
                     ),
                   ),
                 ),
@@ -889,8 +916,10 @@ class _MessageBubbleState extends State<_MessageBubble>
                   margin: msg.imageUrl != null
                       ? const EdgeInsets.only(top: 4)
                       : EdgeInsets.zero,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: isMe ? AppTheme.primary : Colors.white,
                     borderRadius: BorderRadius.only(
@@ -928,7 +957,9 @@ class _MessageBubbleState extends State<_MessageBubble>
                     Text(
                       msg.time,
                       style: TextStyle(
-                          fontSize: 11, color: Colors.grey.shade400),
+                        fontSize: 11,
+                        color: Colors.grey.shade400,
+                      ),
                     ),
                     if (isMe) ...[
                       const SizedBox(width: 4),

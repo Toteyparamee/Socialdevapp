@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/auth_service.dart';
 import '../student/school_activities_screen.dart';
+import '../student/chat_screen.dart';
 import 'add_activity_screen.dart';
 import 'review_works_screen.dart';
 
@@ -158,6 +159,11 @@ class _HomeTabState extends State<_HomeTab> {
     _MenuData(
       icon: Icons.campaign_rounded,
       label: 'แจ้งปัญหา',
+      color: Color.fromARGB(255, 107, 166, 255),
+    ),
+    _MenuData(
+      icon: Icons.chat_bubble_rounded,
+      label: 'แชท',
       color: Color.fromARGB(255, 107, 166, 255),
     ),
   ];
@@ -388,6 +394,15 @@ class _HomeTabState extends State<_HomeTab> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => const ReviewWorksScreen(),
+                                ),
+                              );
+                            case 'แชท':
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const TicketListScreen(
+                                    registrationTitle: 'แชททั้งหมด',
+                                  ),
                                 ),
                               );
                           }

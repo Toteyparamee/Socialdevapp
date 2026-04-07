@@ -153,9 +153,10 @@ main.dart
 | `student/school_activities_screen.dart` | `SchoolActivitiesScreen` | รายการกิจกรรมโรงเรียน + หน้ารายละเอียดกิจกรรม |
 | `student/my_registrations_screen.dart` | `MyRegistrationsScreen` | กิจกรรมที่นักเรียนลงทะเบียนไว้ |
 | `student/chat_screen.dart` | `ChatScreen` | ระบบแชทสำหรับนักเรียน |
-| `teacher/teacher_screen.dart` | `TeacherScreen` | Dashboard ครู + Bottom Navigation (กิจกรรมโรงเรียน / หน้าหลัก / โปรไฟล์) |
+| `teacher/teacher_screen.dart` | `TeacherScreen` | Dashboard ครู + Bottom Navigation (กิจกรรมโรงเรียน / หน้าหลัก / โปรไฟล์) — เมนูลัด: เพิ่มกิจกรรม, ตรวจงานนักเรียน, แจ้งปัญหา, แชท |
 | `teacher/add_activity_screen.dart` | `AddActivityScreen` | ฟอร์มเพิ่มกิจกรรมใหม่สำหรับครู |
 | `teacher/review_works_screen.dart` | `ReviewWorksScreen` | ตรวจงานนักเรียน — ดูกิจกรรมที่ครูสร้าง, รายชื่อนักเรียนที่ส่งงาน, หน้ารายละเอียดงานนักเรียน + ปุ่มให้คะแนน ผ่าน/ไม่ผ่าน + ข้อเสนอแนะ |
+| `organization/organization_screen.dart` | `OrganizationScreen` | Dashboard หน่วยงาน + Bottom Navigation (แผนที่ / หน้าหลัก / โปรไฟล์) — เมนูลัด: เพิ่มกิจกรรม, ตรวจงานนักเรียน, แจ้งปัญหา, แชท |
 
 ---
 
@@ -210,8 +211,8 @@ main.dart
 WelcomeScreen (onboarding 4 หน้า)
   └─ [ข้าม / ถัดไป]
      └─ LoginScreen
-        ├─ Page 1: เลือก Role (นักเรียน / ครู / ทั่วไป)
-        └─ Page 2: กรอก Gmail + Password (นักเรียน) / อีเมล (ครู) / เบอร์โทรหรืออีเมล (ทั่วไป) | Login with Google (Auth0)
+        ├─ Page 1: เลือก Role (นักเรียน / ครู / หน่วยงาน)
+        └─ Page 2: กรอก Gmail + Password (นักเรียน) / อีเมล (ครู) / เบอร์โทรหรืออีเมล (หน่วยงาน) | Login with Google (Auth0)
            └─ StudentScreen (Dashboard นักเรียน)
               ├─ Tab 0: MapHomeScreen (แผนที่)
               │  ├─ แตะ marker → ProblemBottomSheet
@@ -233,6 +234,14 @@ TeacherScreen (Dashboard ครู)
   │               ├─ ดูข้อมูลนักเรียน + เนื้อหางาน
   │               ├─ กรอกคะแนน + ข้อเสนอแนะ
   │               └─ ปุ่ม ผ่าน / ไม่ผ่าน (บังคับกรอกข้อเสนอแนะเมื่อไม่ผ่าน)
+  └─ Tab 2: ProfileTab
+
+OrganizationScreen (Dashboard หน่วยงาน)
+  ├─ Tab 0: MapHomeScreen (แผนที่)
+  ├─ Tab 1: HomeTab (แบนเนอร์ + เมนูลัด + ปฏิทิน)
+  │   ├─ เพิ่มกิจกรรม → AddActivityScreen
+  │   ├─ ตรวจงานนักเรียน → ReviewWorksScreen
+  │   └─ แชท → TicketListScreen
   └─ Tab 2: ProfileTab
 ```
 
@@ -291,10 +300,12 @@ lib/
 │   │   ├── school_activities_screen.dart
 │   │   ├── my_registrations_screen.dart
 │   │   └── chat_screen.dart
-│   └── teacher/
-│       ├── teacher_screen.dart
-│       ├── add_activity_screen.dart
-│       └── review_works_screen.dart
+│   ├── teacher/
+│   │   ├── teacher_screen.dart
+│   │   ├── add_activity_screen.dart
+│   │   └── review_works_screen.dart
+│   └── organization/
+│       └── organization_screen.dart
 ├── services/
 │   └── auth_service.dart
 ├── theme/
@@ -305,7 +316,7 @@ lib/
     └── add_problem_sheet.dart
 ```
 
-**รวมทั้งหมด: 19 ไฟล์ .dart**
+**รวมทั้งหมด: 20 ไฟล์ .dart**
 
 ---
 
@@ -393,7 +404,7 @@ Flutter → POST /auth/google → Server verify กับ Auth0 /userinfo
 | username | string | Unique |
 | email | string | Unique |
 | password | string | bcrypt hash (เฉพาะ local) |
-| role | string | นักเรียน / ครู / ทั่วไป |
+| role | string | นักเรียน / ครู / หน่วยงาน |
 | provider | string | `local` หรือ `google` |
 | google_id | string | Google sub ID |
 | avatar_url | string | รูปโปรไฟล์จาก Google |
@@ -433,7 +444,7 @@ Flutter → POST /auth/google → Server verify กับ Auth0 /userinfo
 
 | Type | ค่า |
 |------|-----|
-| `user_role` | นักเรียน, ครู, ทั่วไป |
+| `user_role` | นักเรียน, ครู, หน่วยงาน |
 | `auth_provider` | local, google |
 | `problem_category` | flood, trash, traffic, infrastructure, other |
 | `problem_status` | pending, in_progress, resolved |
@@ -443,3 +454,5 @@ Flutter → POST /auth/google → Server verify กับ Auth0 /userinfo
 
 - `uuid-ossp` - สร้าง UUID
 - `postgis` - รองรับ location (lat/lng)
+
+เพิ่มเติมตอนนี้มีระบบสร้างเเชทอัตโนมัติใช่ไหม คืออยากให้ถ้านักเรียนทักเเชทกับครูค่อยขึ้นเเชทครู
