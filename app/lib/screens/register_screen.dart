@@ -22,6 +22,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _schoolController = TextEditingController();
 
   UserRole? _selectedRole;
   bool _obscurePassword = true;
@@ -62,6 +63,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     _usernameController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _schoolController.dispose();
     super.dispose();
   }
 
@@ -85,7 +87,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     return switch (_selectedRole ?? UserRole.student) {
       UserRole.student => 'นักเรียน',
       UserRole.teacher => 'ครู',
-      UserRole.general => 'ทั่วไป',
+      UserRole.general => 'หน่วยงาน',
     };
   }
 
@@ -255,7 +257,7 @@ class _RegisterScreenState extends State<RegisterScreen>
               const SizedBox(width: 8),
               _buildRoleChip(
                 UserRole.general,
-                'ทั่วไป',
+                'หน่วยงาน',
                 Icons.people_alt_rounded,
                 const Color(0xFF10B981),
               ),
@@ -329,17 +331,46 @@ class _RegisterScreenState extends State<RegisterScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Display name
-            _buildLabel('ชื่อที่แสดง'),
+            _buildLabel(
+              _selectedRole == UserRole.general
+                  ? 'ชื่อหน่วยงาน'
+                  : 'ชื่อที่แสดง',
+            ),
             const SizedBox(height: 8),
             TextFormField(
               controller: _nameController,
               style: const TextStyle(fontSize: 16, color: Color(0xFF1A1A2E)),
-              decoration: _inputDecoration(hintText: 'ชื่อ-นามสกุล'),
+              decoration: _inputDecoration(
+                hintText: _selectedRole == UserRole.general
+                    ? 'ชื่อหน่วยงาน'
+                    : 'ชื่อ-นามสกุล',
+              ),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'กรุณากรอกชื่อ';
+                if (v == null || v.isEmpty) {
+                  return _selectedRole == UserRole.general
+                      ? 'กรุณากรอกชื่อหน่วยงาน'
+                      : 'กรุณากรอกชื่อ';
+                }
                 return null;
               },
             ),
+            if (_selectedRole == UserRole.student ||
+                _selectedRole == UserRole.teacher) ...[
+              const SizedBox(height: 18),
+              _buildLabel('โรงเรียน'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _schoolController,
+                style: const TextStyle(fontSize: 16, color: Color(0xFF1A1A2E)),
+                decoration: _inputDecoration(hintText: 'ชื่อโรงเรียน'),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'กรุณากรอกชื่อโรงเรียน';
+                  }
+                  return null;
+                },
+              ),
+            ],
             const SizedBox(height: 18),
             // Username
             _buildLabel(_usernameLabel),

@@ -111,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen>
     return switch (_selectedRole) {
       UserRole.student => 'นักเรียน',
       UserRole.teacher => 'ครู',
-      UserRole.general => 'บุคคลทั่วไป',
+      UserRole.general => 'หน่วยงาน',
       null => '',
     };
   }
@@ -251,8 +251,8 @@ class _LoginScreenState extends State<LoginScreen>
                 const SizedBox(height: 12),
                 _buildRoleTile(
                   role: UserRole.general,
-                  label: 'บุคคลทั่วไป',
-                  subtitle: 'General',
+                  label: 'หน่วยงาน',
+                  subtitle: 'Organization',
                   icon: Icons.people_alt_rounded,
                   color: const Color(0xFF10B981),
                   index: 2,

@@ -98,7 +98,7 @@ final List<ProblemReport> sampleProblems = [
     location: const LatLng(13.8100, 100.5800),
     address: 'ซอยลาดพร้าว 71',
     createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-    reportedBy: 'บุคคลทั่วไป',
+    reportedBy: 'หน่วยงาน',
     imageUrls: ['https://picsum.photos/400/300?random=2'],
   ),
   ProblemReport(
