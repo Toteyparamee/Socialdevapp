@@ -455,4 +455,163 @@ Flutter → POST /auth/google → Server verify กับ Auth0 /userinfo
 - `uuid-ossp` - สร้าง UUID
 - `postgis` - รองรับ location (lat/lng)
 
+---
+
+# Backend - Image Service (Go Fiber v3 + MinIO)
+
+Service แยกสำหรับจัดการรูปภาพทั้งหมดของระบบ (รูปปัญหา, รูปโปรไฟล์, รูปกิจกรรม) เก็บไฟล์จริงไว้ที่ MinIO และเก็บ metadata ไว้ใน PostgreSQL ตัวเดียวกับ login service
+
+## หลักการทำงาน
+
+```
+[Flutter Client]
+     │  1. login กับ login service (:8080) → ได้ JWT
+     │
+     │  2. แนบ Authorization: Bearer <JWT> มาที่ image service (:8081)
+     ▼
+[Image Service]
+     │
+     ├─ JWT Middleware  ── verify ด้วย JWT_SECRET เดียวกับ login service
+     │                     (stateless ไม่ต้องคุยกับ login service)
+     │                     ดึง user_id จาก claims ใส่ c.Locals
+     │
+     ├─ Handler         ── validate (ขนาด ≤5MB, mime: jpeg/png/webp)
+     │
+     ├─ Storage Service ── PutObject ขึ้น MinIO ที่ key: {folder}/{uuid}.{ext}
+     │                                     │
+     │                                     ▼
+     │                              [MinIO Bucket]
+     │
+     └─ GORM            ── บันทึก metadata (id, owner_id, key, url, mime, size)
+                                            │
+                                            ▼
+                                    [PostgreSQL: images]
+```
+
+**จุดสำคัญ**
+- ไฟล์จริงเก็บที่ **MinIO** เท่านั้น — DB เก็บแค่ metadata + key
+- ทุก endpoint (ยกเว้น `/health`) อยู่หลัง JWT middleware
+- ทุก query กรอง `owner_id` เสมอ → user เห็นและลบได้เฉพาะรูปของตัวเอง
+- ใช้ **presigned URL** (TTL 15 นาที) เวลาให้ client โหลดรูปจาก private bucket
+
+## โครงสร้างโฟลเดอร์
+
+```
+server/image/
+├── main.go                 # Entry point (:8081) - load env, init MinIO + DB
+├── go.mod / go.sum
+├── .env.example
+├── config/
+│   ├── minio.go            # init MinIO client + ensure bucket
+│   ├── database.go         # GORM + Postgres + AutoMigrate(Image)
+│   └── jwt.go              # อ่าน JWT_SECRET (ต้องตรงกับ login service)
+├── models/
+│   └── image.go            # Image metadata model
+├── services/
+│   ├── storage.go          # Upload / Delete / Presign (wrap minio-go)
+│   └── env.go              # helper อ่าน env
+├── handlers/
+│   └── image.go            # Upload / List / Get / Presign / Delete
+├── middleware/
+│   └── jwt.go              # ตรวจ JWT (ออกโดย login service)
+└── routes/
+    └── routes.go           # /api/images group
+```
+
+## API Endpoints
+
+ทุก endpoint ต้องส่ง `Authorization: Bearer <JWT>` (ยกเว้น `/health`)
+
+| Method | Path | หน้าที่ |
+|--------|------|---------|
+| GET | `/health` | Health check |
+| POST | `/api/images` | Upload รูป (multipart `file` + optional `folder`) → คืน metadata |
+| GET | `/api/images` | List รูปทั้งหมดของ user ปัจจุบัน |
+| GET | `/api/images/:id` | ดู metadata รูป |
+| GET | `/api/images/:id/url` | ขอ presigned URL (15 นาที) |
+| DELETE | `/api/images/:id` | ลบรูปทั้งใน MinIO และ DB |
+
+**ข้อจำกัดการอัปโหลด**
+- ขนาดไม่เกิน 5MB
+- รับเฉพาะ `image/jpeg`, `image/png`, `image/webp`
+
+## Image Model
+
+| Field | Type | หมายเหตุ |
+|-------|------|----------|
+| id | uuid | Primary key |
+| owner_id | string | user_id จาก JWT claims |
+| key | string | path ใน MinIO เช่น `problems/abc.jpg` (unique) |
+| url | string | public URL (ถ้า bucket เปิด public) |
+| folder | string | sub-folder ใน bucket |
+| mime | string | content type |
+| size | int64 | bytes |
+| created_at | time | |
+
+## Auth Flow ระหว่าง 2 services
+
+```
+[Client] ──login──► [login service :8080] ──ออก JWT──► [Client]
+                          │
+                          │ ใช้ JWT_SECRET เดียวกัน
+                          ▼
+[Client] ──Bearer JWT──► [image service :8081]
+                          │
+                          └─ verify signature (ไม่ต้องเรียก login service)
+                             ดึง user_id ใช้เป็น owner_id
+```
+
+> **เงื่อนไข:** `JWT_SECRET` ใน `.env` ของ image service ต้องตรงกับของ login service เป๊ะ ๆ ไม่งั้น verify ไม่ผ่าน
+
+## ENV ที่ต้องตั้ง
+
+```env
+PORT=8081
+
+# MinIO
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_BUCKET=socialdev-images
+MINIO_USE_SSL=false
+MINIO_PUBLIC_URL=http://localhost:9000
+
+# Postgres (ใช้ DB เดียวกับ login service)
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=socialdev
+
+# JWT (ต้องตรงกับ login service)
+JWT_SECRET=default-secret-change-me
+```
+
+## วิธีรัน
+
+```bash
+# 1. รัน MinIO (Docker)
+docker run -d -p 9000:9000 -p 9001:9001 \
+  -e MINIO_ROOT_USER=minioadmin \
+  -e MINIO_ROOT_PASSWORD=minioadmin \
+  minio/minio server /data --console-address ":9001"
+
+# 2. รัน image service
+cd server/image
+cp .env.example .env
+go mod tidy
+go run main.go
+```
+
+## Dependencies (Go)
+
+| Package | ใช้ทำอะไร |
+|---------|-----------|
+| `gofiber/fiber/v3` | Web framework |
+| `minio/minio-go/v7` | MinIO client (S3-compatible) |
+| `golang-jwt/jwt/v5` | verify JWT จาก login service |
+| `gorm.io/gorm` + `driver/postgres` | ORM + Postgres |
+| `google/uuid` | สร้าง UUID สำหรับ key |
+| `joho/godotenv` | Load .env file |
+
 เพิ่มเติมตอนนี้มีระบบสร้างเเชทอัตโนมัติใช่ไหม คืออยากให้ถ้านักเรียนทักเเชทกับครูค่อยขึ้นเเชทครู
