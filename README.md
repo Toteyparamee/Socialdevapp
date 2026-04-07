@@ -140,7 +140,7 @@ main.dart
 
 ---
 
-## Screens (7 ไฟล์)
+## Screens (12 ไฟล์)
 
 | ไฟล์ | Widget | หน้าที่ |
 |------|--------|---------|
@@ -151,6 +151,11 @@ main.dart
 | `problem_detail_screen.dart` | `ProblemDetailScreen` | รายละเอียดปัญหา |
 | `student/student_screen.dart` | `StudentScreen` | Dashboard นักเรียน + Bottom Navigation |
 | `student/school_activities_screen.dart` | `SchoolActivitiesScreen` | รายการกิจกรรมโรงเรียน + หน้ารายละเอียดกิจกรรม |
+| `student/my_registrations_screen.dart` | `MyRegistrationsScreen` | กิจกรรมที่นักเรียนลงทะเบียนไว้ |
+| `student/chat_screen.dart` | `ChatScreen` | ระบบแชทสำหรับนักเรียน |
+| `teacher/teacher_screen.dart` | `TeacherScreen` | Dashboard ครู + Bottom Navigation (กิจกรรมโรงเรียน / หน้าหลัก / โปรไฟล์) |
+| `teacher/add_activity_screen.dart` | `AddActivityScreen` | ฟอร์มเพิ่มกิจกรรมใหม่สำหรับครู |
+| `teacher/review_works_screen.dart` | `ReviewWorksScreen` | ตรวจงานนักเรียน — ดูกิจกรรมที่ครูสร้าง, รายชื่อนักเรียนที่ส่งงาน, หน้ารายละเอียดงานนักเรียน + ปุ่มให้คะแนน ผ่าน/ไม่ผ่าน + ข้อเสนอแนะ |
 
 ---
 
@@ -217,6 +222,18 @@ WelcomeScreen (onboarding 4 หน้า)
               │     └─ แตะ card กิจกรรม → ActivityDetailScreen (รายละเอียด + ลงทะเบียน)
               └─ Tab 2: ProfileTab (โปรไฟล์)
                  └─ Logout → กลับ WelcomeScreen
+
+TeacherScreen (Dashboard ครู)
+  ├─ Tab 0: SchoolActivitiesScreen
+  ├─ Tab 1: HomeTab (แบนเนอร์ + เมนูลัด + ปฏิทิน)
+  │   ├─ เพิ่มกิจกรรม → AddActivityScreen
+  │   └─ ตรวจงานนักเรียน → ReviewWorksScreen
+  │       └─ แตะ card กิจกรรม → SubmissionsScreen (รายชื่อนักเรียนที่ส่งงาน)
+  │           └─ แตะชื่อนักเรียน → StudentWorkDetailScreen
+  │               ├─ ดูข้อมูลนักเรียน + เนื้อหางาน
+  │               ├─ กรอกคะแนน + ข้อเสนอแนะ
+  │               └─ ปุ่ม ผ่าน / ไม่ผ่าน (บังคับกรอกข้อเสนอแนะเมื่อไม่ผ่าน)
+  └─ Tab 2: ProfileTab
 ```
 
 ---
@@ -269,9 +286,15 @@ lib/
 │   ├── register_screen.dart
 │   ├── map_screen.dart
 │   ├── problem_detail_screen.dart
-│   └── student/
-│       ├── student_screen.dart
-│       └── school_activities_screen.dart
+│   ├── student/
+│   │   ├── student_screen.dart
+│   │   ├── school_activities_screen.dart
+│   │   ├── my_registrations_screen.dart
+│   │   └── chat_screen.dart
+│   └── teacher/
+│       ├── teacher_screen.dart
+│       ├── add_activity_screen.dart
+│       └── review_works_screen.dart
 ├── services/
 │   └── auth_service.dart
 ├── theme/
@@ -282,7 +305,7 @@ lib/
     └── add_problem_sheet.dart
 ```
 
-**รวมทั้งหมด: 14 ไฟล์ .dart**
+**รวมทั้งหมด: 19 ไฟล์ .dart**
 
 ---
 

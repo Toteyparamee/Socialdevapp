@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/auth_service.dart';
-import '../map_screen.dart';
 import '../student/school_activities_screen.dart';
 import 'add_activity_screen.dart';
 import 'review_works_screen.dart';
@@ -23,7 +22,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: const [MapHomeScreen(), _HomeTab(), _ProfileTab()],
+        children: const [SchoolActivitiesScreen(), _HomeTab(), _ProfileTab()],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -43,9 +42,9 @@ class _TeacherScreenState extends State<TeacherScreen> {
               children: [
                 _buildNavItem(
                   index: 0,
-                  icon: Icons.map_outlined,
-                  activeIcon: Icons.map_rounded,
-                  label: 'แผนที่',
+                  icon: Icons.school_outlined,
+                  activeIcon: Icons.school_rounded,
+                  label: 'กิจกรรมโรงเรียน',
                 ),
                 _buildNavItem(
                   index: 1,
@@ -154,11 +153,6 @@ class _HomeTabState extends State<_HomeTab> {
     _MenuData(
       icon: Icons.fact_check_rounded,
       label: 'ตรวจงานนักเรียน',
-      color: Color.fromARGB(255, 107, 166, 255),
-    ),
-    _MenuData(
-      icon: Icons.event_rounded,
-      label: 'กิจกรรมโรงเรียน',
       color: Color.fromARGB(255, 107, 166, 255),
     ),
     _MenuData(
@@ -394,14 +388,6 @@ class _HomeTabState extends State<_HomeTab> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => const ReviewWorksScreen(),
-                                ),
-                              );
-                            case 'กิจกรรมโรงเรียน':
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const SchoolActivitiesScreen(),
                                 ),
                               );
                           }
