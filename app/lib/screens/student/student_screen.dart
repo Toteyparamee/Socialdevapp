@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../services/auth_service.dart';
 import '../map_screen.dart';
 import 'school_activities_screen.dart';
+import 'my_registrations_screen.dart';
 
 class StudentScreen extends StatefulWidget {
   const StudentScreen({super.key});
@@ -122,6 +123,7 @@ class _HomeTabState extends State<_HomeTab> {
   final PageController _bannerController = PageController();
   Timer? _autoScrollTimer;
   int _currentBanner = 0;
+  DateTime? _selectedDate;
 
   // ข่าวสาร / ประกาศ
   static const _banners = [
@@ -147,7 +149,12 @@ class _HomeTabState extends State<_HomeTab> {
     _MenuData(
       icon: Icons.campaign_rounded,
       label: 'แจ้งปัญหา',
-      color: Color(0xFFEF4444),
+      color: Color.fromARGB(255, 107, 166, 255),
+    ),
+    _MenuData(
+      icon: Icons.how_to_reg_rounded,
+      label: 'ลงทะเบียน',
+      color: Color.fromARGB(255, 107, 166, 255),
     ),
     _MenuData(
       icon: Icons.event_rounded,
@@ -382,14 +389,23 @@ class _HomeTabState extends State<_HomeTab> {
                             final m = pageMenus[i];
                             return GestureDetector(
                               onTap: () {
-                                if (m.label == 'กิจกรรมโรงเรียน') {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const SchoolActivitiesScreen(),
-                                    ),
-                                  );
+                                switch (m.label) {
+                                  case 'กิจกรรมโรงเรียน':
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const SchoolActivitiesScreen(),
+                                      ),
+                                    );
+                                  case 'ลงทะเบียน':
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const MyRegistrationsScreen(),
+                                      ),
+                                    );
                                 }
                               },
                               child: Column(
@@ -432,8 +448,443 @@ class _HomeTabState extends State<_HomeTab> {
               ),
 
               const SizedBox(height: 24),
+
+              // ── ปฏิทิน ──
+              _buildCalendarSection(),
+
+              const SizedBox(height: 24),
+
+              // ── กิจกรรมที่กำลังมาถึง ──
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _selectedDate != null
+                          ? 'กิจกรรมวันที่ ${_selectedDate!.day} ${_thaiMonthsShort[_selectedDate!.month]}'
+                          : 'กิจกรรมที่กำลังมาถึง',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    if (_selectedDate != null)
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedDate = null),
+                        child: Text(
+                          'ดูทั้งหมด',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MyRegistrationsScreen(),
+                          ),
+                        ),
+                        child: Text(
+                          'ดูทั้งหมด',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              ..._filteredEvents.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        // Date box
+                        Container(
+                          width: 50,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: e.color.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                '${e.eventDate.day}',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: e.color,
+                                ),
+                              ),
+                              Text(
+                                _thaiMonthsShort[e.eventDate.month],
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: e.color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                e.title,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                e.subtitle,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: e.color.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            e.status,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: e.color,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ── ปฏิทิน Grid ──
+  DateTime _calendarMonth = DateTime.now();
+
+  static const _thaiMonths = [
+    '',
+    'ม.ค.',
+    'ก.พ.',
+    'มี.ค.',
+    'เม.ย.',
+    'พ.ค.',
+    'มิ.ย.',
+    'ก.ค.',
+    'ส.ค.',
+    'ก.ย.',
+    'ต.ค.',
+    'พ.ย.',
+    'ธ.ค.',
+  ];
+  static const _thaiMonthsShort = [
+    '',
+    'ม.ค.',
+    'ก.พ.',
+    'มี.ค.',
+    'เม.ย.',
+    'พ.ค.',
+    'มิ.ย.',
+    'ก.ค.',
+    'ส.ค.',
+    'ก.ย.',
+    'ต.ค.',
+    'พ.ย.',
+    'ธ.ค.',
+  ];
+  static const _dayHeaders = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
+
+  // ข้อมูลกิจกรรมที่กำลังมาถึง
+  static final _upcomingEvents = [
+    _UpcomingEvent(
+      title: 'กิจกรรมจิตอาสาพัฒนาชุมชน',
+      subtitle: 'สำนักงานเขตพื้นที่การศึกษา',
+      eventDate: DateTime(2026, 4, 15),
+      status: 'รอดำเนินการ',
+      color: const Color(0xFFFBBF24),
+    ),
+    _UpcomingEvent(
+      title: 'แข่งขันกีฬาสีประจำปี',
+      subtitle: 'ฝ่ายกิจกรรมนักเรียน',
+      eventDate: DateTime(2026, 4, 20),
+      status: 'อนุมัติแล้ว',
+      color: const Color(0xFF10B981),
+    ),
+    _UpcomingEvent(
+      title: 'ค่ายภาษาอังกฤษ English Camp',
+      subtitle: 'กลุ่มสาระภาษาต่างประเทศ',
+      eventDate: DateTime(2026, 5, 10),
+      status: 'รอส่งงาน',
+      color: const Color(0xFF3B82F6),
+    ),
+  ];
+
+  List<_UpcomingEvent> get _filteredEvents {
+    if (_selectedDate == null) return _upcomingEvents;
+    return _upcomingEvents
+        .where(
+          (e) =>
+              e.eventDate.year == _selectedDate!.year &&
+              e.eventDate.month == _selectedDate!.month &&
+              e.eventDate.day == _selectedDate!.day,
+        )
+        .toList();
+  }
+
+  Set<int> _eventDaysInMonth(DateTime month) {
+    final days = <int>{};
+    for (final e in _upcomingEvents) {
+      if (e.eventDate.year == month.year && e.eventDate.month == month.month) {
+        days.add(e.eventDate.day);
+      }
+    }
+    return days;
+  }
+
+  Widget _buildCalendarSection() {
+    final year = _calendarMonth.year;
+    final month = _calendarMonth.month;
+    final thaiYear = year + 543;
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final firstWeekday = DateTime(year, month, 1).weekday;
+    final eventDays = _eventDaysInMonth(_calendarMonth);
+    final today = DateTime.now();
+    final totalCells = ((firstWeekday - 1 + daysInMonth + 6) ~/ 7) * 7;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Month nav
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _calendarMonth = DateTime(
+                      _calendarMonth.year,
+                      _calendarMonth.month - 1,
+                    );
+                  }),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE8ECF0)),
+                    ),
+                    child: const Icon(
+                      Icons.chevron_left_rounded,
+                      size: 20,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                ),
+                Text(
+                  '${_thaiMonths[month]} $thaiYear',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _calendarMonth = DateTime(
+                      _calendarMonth.year,
+                      _calendarMonth.month + 1,
+                    );
+                  }),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE8ECF0)),
+                    ),
+                    child: const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Day headers
+            Row(
+              children: _dayHeaders
+                  .map(
+                    (d) => Expanded(
+                      child: Center(
+                        child: Text(
+                          d,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: d == 'ส' || d == 'อา'
+                                ? const Color(0xFFEF4444)
+                                : Colors.grey.shade500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 6),
+
+            // Grid
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 7,
+                mainAxisSpacing: 2,
+                crossAxisSpacing: 2,
+                childAspectRatio: 1,
+              ),
+              itemCount: totalCells,
+              itemBuilder: (context, index) {
+                final dayOffset = index - (firstWeekday - 1);
+                if (dayOffset < 0 || dayOffset >= daysInMonth) {
+                  return const SizedBox();
+                }
+                final day = dayOffset + 1;
+                final hasEvent = eventDays.contains(day);
+                final isToday =
+                    today.year == year &&
+                    today.month == month &&
+                    today.day == day;
+                final isSelected =
+                    _selectedDate != null &&
+                    _selectedDate!.year == year &&
+                    _selectedDate!.month == month &&
+                    _selectedDate!.day == day;
+
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      if (isSelected) {
+                        _selectedDate = null;
+                      } else {
+                        _selectedDate = DateTime(year, month, day);
+                      }
+                    });
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppTheme.primary
+                          : isToday
+                          ? AppTheme.primary.withValues(alpha: 0.1)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '$day',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: hasEvent || isToday
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                            color: isSelected
+                                ? Colors.white
+                                : isToday
+                                ? AppTheme.primary
+                                : AppTheme.textPrimary,
+                          ),
+                        ),
+                        if (hasEvent) ...[
+                          const SizedBox(height: 1),
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected
+                                  ? Colors.white
+                                  : const Color(0xFFEF4444),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -458,6 +909,21 @@ class _MenuData {
   const _MenuData({
     required this.icon,
     required this.label,
+    required this.color,
+  });
+}
+
+class _UpcomingEvent {
+  final String title;
+  final String subtitle;
+  final DateTime eventDate;
+  final String status;
+  final Color color;
+  const _UpcomingEvent({
+    required this.title,
+    required this.subtitle,
+    required this.eventDate,
+    required this.status,
     required this.color,
   });
 }
