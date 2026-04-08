@@ -14,8 +14,8 @@ class AuthService extends ChangeNotifier {
 
   // ── Config ──
   static final String _baseUrl = Platform.isAndroid
-      ? 'http://10.0.2.2:8000' // Android emulator
-      : 'http://localhost:8000'; // iOS simulator
+      ? 'http://10.0.2.2:8080' // Android emulator
+      : 'http://localhost:8080'; // iOS simulator
   static const String _auth0Domain = 'dev-p6m40iaxhz0i543y.us.auth0.com';
   static const String _auth0ClientId = 'aBJe4HwBKfZ98XiWgfVKios2UrGx6PU3';
   static const String _auth0RedirectUri = 'com.socialdev.app://login-callback';

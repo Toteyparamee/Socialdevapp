@@ -27,20 +27,20 @@
                     │   Routing · JWT verify · Rate limit │
                     └─────────────────┬──────────────────┘
                                       │
-   ┌────────────┬──────────┬──────────┼──────────┬──────────┬───────────┐
-   ▼            ▼          ▼          ▼          ▼          ▼           ▼
-┌───────┐  ┌───────┐  ┌────────┐ ┌────────┐ ┌───────┐  ┌───────┐  ┌────────┐
-│ Auth  │  │ User  │  │Problem │ │Activity│ │ Image │  │ Chat  │  │  Auth0 │
-│ :8080 │  │ :8082 │  │ :8083  │ │ :8084  │ │ :8081 │  │ :8085 │  │  OIDC  │
-└───┬───┘  └───┬───┘  └───┬────┘ └───┬────┘ └───┬───┘  └───┬───┘  └────────┘
-    │          │          │          │          │          │
-    ▼          ▼          ▼          ▼          ▼          ▼
-┌───────┐ ┌────────┐ ┌──────────┐ ┌────────┐ ┌──────┐  ┌──────────┐
-│  PG   │ │   PG   │ │PG+PostGIS│ │   PG   │ │MinIO │  │ PG+Redis │
-│ users │ │profiles│ │ problems │ │activity│ │+meta │  │  (ws)    │
-└───────┘ └────────┘ └──────────┘ └────────┘ └──────┘  └──────────┘
-    │          │          │          │          │          │
-    └──────────┴──────┬───┴──────────┴──────────┴──────────┘
+   ┌────────────┬──────────┬──────────┬──────────┬───────────┐
+   ▼            ▼          ▼          ▼          ▼           ▼
+┌───────┐  ┌────────┐ ┌────────┐ ┌───────┐  ┌───────┐  ┌────────┐
+│ Auth  │  │Problem │ │Activity│ │ Image │  │ Chat  │  │  Auth0 │
+│ :8080 │  │ :8083  │ │ :8084  │ │ :8081 │  │ :8085 │  │  OIDC  │
+└───┬───┘  └───┬────┘ └───┬────┘ └───┬───┘  └───┬───┘  └────────┘
+    │          │          │          │          │
+    ▼          ▼          ▼          ▼          ▼
+┌───────┐ ┌──────────┐ ┌────────┐ ┌──────┐  ┌──────────┐
+│  PG   │ │PG+PostGIS│ │   PG   │ │MinIO │  │ PG+Redis │
+│ users │ │ problems │ │activity│ │+meta │  │  (ws)    │
+└───────┘ └──────────┘ └────────┘ └──────┘  └──────────┘
+    │          │          │          │          │
+    └──────┬───┴──────────┴──────────┴──────────┘
                      │ publish / subscribe events
                      ▼
         ┌────────────────────────────────────────┐
@@ -67,8 +67,7 @@
 | Service | Port | Responsibility | Data Store |
 |---------|------|----------------|------------|
 | **API Gateway** | 80/443 | Single entry, routing, JWT verify, rate limit | - |
-| **Auth Service** | 8080 | Register / Login / Google OAuth / JWT issuance | Postgres |
-| **User Service** | 8082 | Profile, role, preference | Postgres |
+| **Auth Service** | 8080 | Register / Login / Google OAuth / JWT / Profile | Postgres |
 | **Problem Service** | 8083 | CRUD ปัญหาชุมชน + PostGIS query | Postgres + PostGIS |
 | **Activity Service** | 8084 | กิจกรรมโรงเรียน, ลงทะเบียน, ส่งงาน, ตรวจงาน | Postgres |
 | **Image Service** | 8081 | Upload / Presign รูปทุกประเภท | MinIO + Postgres |
