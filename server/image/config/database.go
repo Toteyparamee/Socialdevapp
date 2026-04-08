@@ -7,8 +7,6 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-
-	"github.com/socialdev/image/models"
 )
 
 var DB *gorm.DB
@@ -30,5 +28,5 @@ func ConnectDatabase() error {
 	DB = db
 	log.Println("database connected")
 
-	return db.AutoMigrate(&models.Image{})
+	return nil
 }

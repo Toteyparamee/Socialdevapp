@@ -5,6 +5,7 @@ import "time"
 type Image struct {
 	ID        string    `gorm:"primaryKey;type:uuid" json:"id"`
 	OwnerID   string    `gorm:"index;not null" json:"owner_id"`
+	Bucket    string    `gorm:"not null" json:"bucket"`
 	Key       string    `gorm:"uniqueIndex;not null" json:"key"`
 	URL       string    `gorm:"not null" json:"url"`
 	Folder    string    `json:"folder"`

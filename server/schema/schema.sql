@@ -110,6 +110,29 @@ CREATE TABLE activity_registrations (
 CREATE INDEX idx_activity_registrations_user_id ON activity_registrations (user_id);
 
 -- ============================================================
+-- 6. Images (ไฟล์รูปที่เก็บใน MinIO - จัดการโดย image service)
+-- ============================================================
+CREATE TABLE images (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_id   VARCHAR(64)  NOT NULL,                  -- user_id จาก JWT claims
+    bucket     VARCHAR(100) NOT NULL,                  -- ชื่อ MinIO bucket
+    key        VARCHAR(500) NOT NULL UNIQUE,           -- path ใน bucket เช่น problems/uuid.jpg
+    url        VARCHAR(1000) NOT NULL,                 -- public URL (หรือว่าง ถ้า private)
+    folder     VARCHAR(100),                           -- sub-folder เช่น problems / avatars / activities
+    mime       VARCHAR(100) NOT NULL,                  -- image/jpeg, image/png, image/webp
+    size       BIGINT       NOT NULL,                  -- bytes
+    width      INT,                                    -- optional metadata
+    height     INT,
+    created_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_images_owner_id   ON images (owner_id);
+CREATE INDEX idx_images_folder     ON images (folder);
+CREATE INDEX idx_images_created_at ON images (created_at DESC);
+CREATE INDEX idx_images_deleted_at ON images (deleted_at);
+
+-- ============================================================
 -- Trigger: auto-update updated_at
 -- ============================================================
 CREATE OR REPLACE FUNCTION update_updated_at()

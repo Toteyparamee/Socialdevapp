@@ -30,8 +30,8 @@ func Upload(c fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "file is required")
 	}
-	if fh.Size > 5*1024*1024 {
-		return fiber.NewError(fiber.StatusRequestEntityTooLarge, "max 5MB")
+	if fh.Size > 30*1024*1024 {
+		return fiber.NewError(fiber.StatusRequestEntityTooLarge, "max 30MB")
 	}
 	if !allowedMime[fh.Header.Get("Content-Type")] {
 		return fiber.NewError(fiber.StatusUnsupportedMediaType, "jpeg/png/webp only")
@@ -46,6 +46,7 @@ func Upload(c fiber.Ctx) error {
 	img := models.Image{
 		ID:        uuid.NewString(),
 		OwnerID:   ownerID(c),
+		Bucket:    config.Bucket,
 		Key:       res.Key,
 		URL:       res.URL,
 		Folder:    folder,

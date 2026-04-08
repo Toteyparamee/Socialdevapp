@@ -1,79 +1,145 @@
 # Socialdev App
 
-## High-Level Architecture
+## High-Level Architecture (Microservices + Event-Driven)
+
+ระบบออกแบบเป็น **microservices** แยกตาม domain และสื่อสารกันแบบ async ผ่าน **Event Bus (Kafka / NATS)** สำหรับงานที่ไม่ต้องรอผลลัพธ์ทันที เช่น การแจ้งเตือน, การสร้างห้องแชทอัตโนมัติ และ analytics
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        CLIENT (Flutter)                             │
-│                                                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────────┐ │
-│  │  Welcome /    │  │  Map Screen  │  │  Student Dashboard        │ │
-│  │  Login /      │  │  + Markers   │  │  ┌─────┬────────┬──────┐ │ │
-│  │  Register     │  │  + Filter    │  │  │ Map │Activity│Profile│ │ │
-│  └──────┬───────┘  └──────┬───────┘  │  └─────┴────────┴──────┘ │ │
-│         │                  │          └───────────┬───────────────┘ │
-│         ▼                  ▼                      ▼                 │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                    Provider (AuthService)                    │   │
-│  │          State Management + Session Persistence             │   │
-│  │        (SharedPreferences / FlutterSecureStorage)           │   │
-│  └────────────────────────┬────────────────────────────────────┘   │
-│                           │                                         │
-│  ┌────────────────────────┼────────────────────────────────────┐   │
-│  │         HTTP Client    │    google_maps_flutter             │   │
-│  └────────────────────────┼────────────────────────────────────┘   │
-└───────────────────────────┼─────────────────────────────────────────┘
-                            │
-              ┌─────────────┼──────────────┐
-              │  REST API    │   OAuth2     │
-              │  (JSON/JWT)  │   Redirect   │
-              ▼              ▼              ▼
-┌─────────────────────┐   ┌──────────────────────┐
-│   BACKEND (Go Fiber) │   │   AUTH0               │
-│                      │   │   (OAuth2 / OIDC)     │
-│  ┌────────────────┐  │   │                        │
-│  │  Routes        │  │   │  ┌──────────────────┐  │
-│  │  /auth/*       │◄─┼───┤  │  Google Identity  │  │
-│  │  /user/*       │  │   │  │  Provider         │  │
-│  │  /health       │  │   │  └──────────────────┘  │
-│  └───────┬────────┘  │   └──────────────────────┘
-│          │           │
-│  ┌───────▼────────┐  │
-│  │  Middleware     │  │
-│  │  JWT Validate   │  │
-│  └───────┬────────┘  │
-│          │           │
-│  ┌───────▼────────┐  │
-│  │  Handlers      │  │
-│  │  auth.go       │  │
-│  │  user.go       │  │
-│  └───────┬────────┘  │
-│          │           │
-│  ┌───────▼────────┐  │
-│  │  GORM (ORM)    │  │
-│  └───────┬────────┘  │
-└──────────┼───────────┘
-           │
-           ▼
-┌──────────────────────────────┐
-│  POSTGRESQL + PostGIS        │
-│                              │
-│  ┌────────┐  ┌────────────┐  │
-│  │ users   │  │ problem_   │  │
-│  │         │  │ reports    │  │
-│  └────────┘  └────────────┘  │
-│  ┌────────┐  ┌────────────┐  │
-│  │problem_│  │ school_    │  │
-│  │images  │  │ activities │  │
-│  └────────┘  └────────────┘  │
-│  ┌──────────────────────┐    │
-│  │activity_registrations│    │
-│  └──────────────────────┘    │
-└──────────────────────────────┘
+│                      FRONTEND (Flutter Client)                       │
+│                                                                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐ │
+│  │  Welcome /  │  │   Student   │  │   Teacher   │  │Organization│ │
+│  │  Login /    │  │  Dashboard  │  │  Dashboard  │  │  Dashboard │ │
+│  │  Register   │  │ Map·Act·Pro │  │ Act·Home·Pro│  │Map·Home·Pro│ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘ │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐│
+│  │  State: Provider (AuthService) · SharedPreferences              ││
+│  │  Network: HTTP Client · WebSocket · Auth0 (flutter_appauth)     ││
+│  │  UI: google_maps_flutter · image_picker · geolocator            ││
+│  └────────────────────────────────────────────────────────────────┘│
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │ HTTPS / WSS
+                               ▼
+                    ┌────────────────────────────────────┐
+                    │   API Gateway (Kong / Traefik)      │
+                    │   Routing · JWT verify · Rate limit │
+                    └─────────────────┬──────────────────┘
+                                      │
+   ┌────────────┬──────────┬──────────┼──────────┬──────────┬───────────┐
+   ▼            ▼          ▼          ▼          ▼          ▼           ▼
+┌───────┐  ┌───────┐  ┌────────┐ ┌────────┐ ┌───────┐  ┌───────┐  ┌────────┐
+│ Auth  │  │ User  │  │Problem │ │Activity│ │ Image │  │ Chat  │  │  Auth0 │
+│ :8080 │  │ :8082 │  │ :8083  │ │ :8084  │ │ :8081 │  │ :8085 │  │  OIDC  │
+└───┬───┘  └───┬───┘  └───┬────┘ └───┬────┘ └───┬───┘  └───┬───┘  └────────┘
+    │          │          │          │          │          │
+    ▼          ▼          ▼          ▼          ▼          ▼
+┌───────┐ ┌────────┐ ┌──────────┐ ┌────────┐ ┌──────┐  ┌──────────┐
+│  PG   │ │   PG   │ │PG+PostGIS│ │   PG   │ │MinIO │  │ PG+Redis │
+│ users │ │profiles│ │ problems │ │activity│ │+meta │  │  (ws)    │
+└───────┘ └────────┘ └──────────┘ └────────┘ └──────┘  └──────────┘
+    │          │          │          │          │          │
+    └──────────┴──────┬───┴──────────┴──────────┴──────────┘
+                     │ publish / subscribe events
+                     ▼
+        ┌────────────────────────────────────────┐
+        │       EVENT BUS  (Kafka / NATS)         │
+        │                                          │
+        │  user.registered                         │
+        │  problem.created · problem.status.changed│
+        │  activity.created · activity.joined      │
+        │  submission.reviewed                     │
+        │  chat.message.sent · chat.room.created   │
+        │  image.uploaded                          │
+        └──────────────────┬─────────────────────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        ▼                  ▼                  ▼
+  ┌────────────┐    ┌────────────┐     ┌────────────┐
+  │Notification│    │ Analytics  │     │   Audit    │
+  │ (FCM/Mail) │    │ (warehouse)│     │   (logs)   │
+  └────────────┘    └────────────┘     └────────────┘
 ```
 
-### Architecture Overview
+### Services (Domain Boundaries)
 
+| Service | Port | Responsibility | Data Store |
+|---------|------|----------------|------------|
+| **API Gateway** | 80/443 | Single entry, routing, JWT verify, rate limit | - |
+| **Auth Service** | 8080 | Register / Login / Google OAuth / JWT issuance | Postgres |
+| **User Service** | 8082 | Profile, role, preference | Postgres |
+| **Problem Service** | 8083 | CRUD ปัญหาชุมชน + PostGIS query | Postgres + PostGIS |
+| **Activity Service** | 8084 | กิจกรรมโรงเรียน, ลงทะเบียน, ส่งงาน, ตรวจงาน | Postgres |
+| **Image Service** | 8081 | Upload / Presign รูปทุกประเภท | MinIO + Postgres |
+| **Chat Service** | 8085 | WebSocket, ห้องแชท auto-create เมื่อนักเรียนทักครู | Postgres + Redis |
+| **Notification** | 8086 | Push (FCM), Email — consume events | Redis queue |
+| **Analytics** | 8087 | สรุปสถิติ, dashboard — consume events | ClickHouse |
+
+### Event Topics
+
+| Topic | Producer | Consumers |
+|-------|----------|-----------|
+| `user.registered` | Auth | Notification, Analytics |
+| `problem.created` | Problem | Notification, Analytics |
+| `problem.status.changed` | Problem | Notification (เจ้าของปัญหา) |
+| `activity.created` | Activity | Notification (broadcast นักเรียน) |
+| `activity.joined` | Activity | Notification (แจ้งครู) |
+| `submission.reviewed` | Activity | Notification, Chat (ส่ง feedback อัตโนมัติ) |
+| `chat.message.sent` | Chat | Notification (push offline user) |
+| `image.uploaded` | Image | Problem / Activity (link metadata) |
+
+### Auto-Create Chat Room (นักเรียนทักครู)
+
+```
+[Student] ──"ทักครู"──► Chat Service
+                            │
+                            ├─ ตรวจว่ามีห้อง student_id ↔ teacher_id แล้วหรือยัง
+                            │     ├─ ไม่มี → สร้างห้องใหม่ 1:1
+                            │     │           └─ publish chat.room.created
+                            │     └─ มี     → reuse ห้องเดิม
+                            ├─ บันทึกข้อความลง DB
+                            ├─ broadcast ผ่าน WebSocket ให้ครู (ถ้า online)
+                            └─ publish chat.message.sent
+                                         │
+                                         ▼
+                                Notification Service
+                                         │
+                                         └─ ครู offline → ส่ง FCM push
+```
+
+### Saga ตัวอย่าง: ครูตรวจงานนักเรียน
+
+```
+Activity Service: ครูกด "ผ่าน"
+   │
+   ├─ UPDATE submission SET status='passed'
+   └─ publish submission.reviewed
+            │
+            ├──► Notification: push แจ้งนักเรียน
+            ├──► Chat: ส่งข้อความ feedback อัตโนมัติเข้าห้องครู↔นักเรียน
+            └──► Analytics: บันทึกสถิติการผ่าน/ไม่ผ่าน
+```
+
+### Communication Patterns
+
+| รูปแบบ | ใช้เมื่อ | ตัวอย่าง |
+|--------|---------|---------|
+| **Sync (REST/gRPC)** | ต้องการผลลัพธ์ทันที | Client → Gateway → Service |
+| **Async (Event Bus)** | งานที่ไม่ต้องรอ มี consumer หลายตัว | Notification, Analytics, Audit |
+| **WebSocket** | Real-time bi-directional | Chat Service |
+
+### Cross-Cutting Concerns
+
+- **Auth:** JWT ออกจาก Auth Service, ทุก service share `JWT_SECRET` หรือใช้ JWKS
+- **Service Discovery:** Consul / Kubernetes DNS
+- **Observability:** OpenTelemetry → Jaeger (trace) + Prometheus/Grafana (metric) + Loki (log)
+- **Resilience:** Circuit breaker, retry, dead-letter queue
+- **Database per Service:** ห้าม service อื่นเข้า DB ข้าม domain — ต้องผ่าน API/Event เท่านั้น
+- **Deployment:** Docker + Kubernetes, แต่ละ service deploy อิสระ
+
+### Architecture Overview
+ฝ
 | Layer | Technology | หน้าที่ |
 |-------|-----------|---------|
 | **Frontend** | Flutter (Dart) | Cross-platform mobile app (iOS, Android, Web) |
