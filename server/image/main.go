@@ -31,7 +31,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8001"
+		port = "8081"
 	}
 	log.Printf("image service listening on :%s", port)
 	log.Fatal(app.Listen(":" + port))

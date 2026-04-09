@@ -11,6 +11,8 @@ import (
 	"login-service/config"
 	"login-service/models"
 
+	"socialdev/shared/events"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -87,6 +89,14 @@ func Register(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to generate token"})
 	}
 
+	events.Publish(events.TopicUserRegistered, map[string]interface{}{
+		"user_id":  user.ID,
+		"email":    user.Email,
+		"username": user.Username,
+		"role":     user.Role,
+		"provider": "local",
+	})
+
 	return c.Status(201).JSON(AuthResponse{Token: token, User: user})
 }
 
@@ -161,6 +171,13 @@ func GoogleLogin(c fiber.Ctx) error {
 		if err := config.DB.Create(&user).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to create user"})
 		}
+		events.Publish(events.TopicUserRegistered, map[string]interface{}{
+			"user_id":  user.ID,
+			"email":    user.Email,
+			"username": user.Username,
+			"role":     user.Role,
+			"provider": "google",
+		})
 	} else {
 		// อัพเดทข้อมูลจาก Google
 		config.DB.Model(&user).Updates(models.User{

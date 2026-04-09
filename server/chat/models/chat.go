@@ -19,7 +19,8 @@ type Message struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
 	RoomID    uuid.UUID `gorm:"type:uuid;index;not null" json:"room_id"`
 	SenderID  string    `gorm:"index;not null" json:"sender_id"`
-	Content   string    `gorm:"not null" json:"content"`
+	Content   string    `json:"content"`
+	ImageID   string    `json:"image_id"`
 	ReadAt    *time.Time `json:"read_at"`
 	CreatedAt time.Time `json:"created_at"`
 }

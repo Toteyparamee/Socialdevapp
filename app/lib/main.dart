@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'services/auth_service.dart';
+import 'services/problem_service.dart';
+import 'services/activity_service.dart';
+import 'services/chat_service.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/student/student_screen.dart';
 import 'screens/teacher/teacher_screen.dart';
@@ -26,11 +29,28 @@ class CommunityReportApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AuthService(),
-      child: MaterialApp(
-        title: 'แจ้งปัญหาชุมชน',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.themeData,
-        home: const AuthGate(),
+      child: Consumer<AuthService>(
+        builder: (context, auth, _) {
+          return MultiProvider(
+            providers: [
+              ChangeNotifierProvider(
+                create: (_) => ProblemService(auth),
+              ),
+              ChangeNotifierProvider(
+                create: (_) => ActivityService(auth),
+              ),
+              ChangeNotifierProvider(
+                create: (_) => ChatService(auth),
+              ),
+            ],
+            child: MaterialApp(
+              title: 'แจ้งปัญหาชุมชน',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.themeData,
+              home: const AuthGate(),
+            ),
+          );
+        },
       ),
     );
   }

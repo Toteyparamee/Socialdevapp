@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_appauth/flutter_appauth.dart';
+import 'api_config.dart';
 
 class AuthService extends ChangeNotifier {
   static const _keyIsLoggedIn = 'is_logged_in';
@@ -11,11 +11,10 @@ class AuthService extends ChangeNotifier {
   static const _keyRole = 'user_role';
   static const _keyToken = 'jwt_token';
   static const _keyAvatarUrl = 'avatar_url';
+  static const _keyUserId = 'user_id';
 
   // ── Config ──
-  static final String _baseUrl = Platform.isAndroid
-      ? 'http://10.0.2.2:8080' // Android emulator
-      : 'http://localhost:8080'; // iOS simulator
+  static String get _baseUrl => ApiConfig.loginUrl;
   static const String _auth0Domain = 'dev-p6m40iaxhz0i543y.us.auth0.com';
   static const String _auth0ClientId = 'aBJe4HwBKfZ98XiWgfVKios2UrGx6PU3';
   static const String _auth0RedirectUri = 'com.socialdev.app://login-callback';
@@ -27,6 +26,7 @@ class AuthService extends ChangeNotifier {
   String? _role;
   String? _token;
   String? _avatarUrl;
+  String? _userId;
   bool _isLoading = true;
 
   bool get isLoggedIn => _isLoggedIn;
@@ -34,6 +34,7 @@ class AuthService extends ChangeNotifier {
   String? get role => _role;
   String? get token => _token;
   String? get avatarUrl => _avatarUrl;
+  String? get userId => _userId;
   bool get isLoading => _isLoading;
 
   AuthService() {
@@ -47,6 +48,7 @@ class AuthService extends ChangeNotifier {
     _role = prefs.getString(_keyRole);
     _token = prefs.getString(_keyToken);
     _avatarUrl = prefs.getString(_keyAvatarUrl);
+    _userId = prefs.getString(_keyUserId);
     _isLoading = false;
     notifyListeners();
   }
@@ -56,6 +58,7 @@ class AuthService extends ChangeNotifier {
     required String role,
     required String token,
     String? avatarUrl,
+    String? userId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyIsLoggedIn, true);
@@ -65,12 +68,16 @@ class AuthService extends ChangeNotifier {
     if (avatarUrl != null) {
       await prefs.setString(_keyAvatarUrl, avatarUrl);
     }
+    if (userId != null) {
+      await prefs.setString(_keyUserId, userId);
+    }
 
     _isLoggedIn = true;
     _username = username;
     _role = role;
     _token = token;
     _avatarUrl = avatarUrl;
+    _userId = userId;
     notifyListeners();
   }
 
@@ -97,6 +104,7 @@ class AuthService extends ChangeNotifier {
         role: data['user']['role'],
         token: data['token'],
         avatarUrl: data['user']['avatar_url'],
+        userId: data['user']['id']?.toString(),
       );
     } else {
       final data = jsonDecode(response.body);
@@ -130,6 +138,7 @@ class AuthService extends ChangeNotifier {
         username: data['user']['username'],
         role: data['user']['role'],
         token: data['token'],
+        userId: data['user']['id']?.toString(),
       );
     } else {
       final data = jsonDecode(response.body);
@@ -170,6 +179,7 @@ class AuthService extends ChangeNotifier {
         role: data['user']['role'],
         token: data['token'],
         avatarUrl: data['user']['avatar_url'],
+        userId: data['user']['id']?.toString(),
       );
     } else {
       final data = jsonDecode(response.body);
@@ -187,6 +197,7 @@ class AuthService extends ChangeNotifier {
     _role = null;
     _token = null;
     _avatarUrl = null;
+    _userId = null;
     notifyListeners();
   }
 
@@ -195,6 +206,45 @@ class AuthService extends ChangeNotifier {
     'Content-Type': 'application/json',
     if (_token != null) 'Authorization': 'Bearer $_token',
   };
+
+  // ── Lookup usernames by IDs (cached) ──
+  final Map<String, String> _nameCache = {};
+
+  Future<Map<String, String>> lookupUsers(List<String> ids) async {
+    // Filter out already cached
+    final missing = ids.where((id) => !_nameCache.containsKey(id)).toList();
+
+    if (missing.isNotEmpty) {
+      try {
+        final response = await http
+            .post(
+              Uri.parse('$_baseUrl/users/lookup'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'ids': missing}),
+            )
+            .timeout(const Duration(seconds: 5));
+
+        debugPrint('[lookup] status=${response.statusCode} body=${response.body}');
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          for (final entry in data.entries) {
+            _nameCache[entry.key] = (entry.value['username'] as String?) ?? 'User ${entry.key}';
+          }
+        }
+      } catch (e) {
+        debugPrint('[lookup] error: $e');
+      }
+
+      // Fill missing with fallback
+      for (final id in missing) {
+        _nameCache.putIfAbsent(id, () => 'User $id');
+      }
+    }
+
+    return {for (final id in ids) id: _nameCache[id] ?? 'User $id'};
+  }
+
+  String getCachedName(String userId) => _nameCache[userId] ?? userId;
 }
 
 class AuthException implements Exception {

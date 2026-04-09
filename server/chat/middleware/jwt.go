@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"strings"
 
 	"chat-service/config"
@@ -26,7 +27,15 @@ func JWTProtect(c fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"error": "invalid claims"})
 	}
 	if uid, ok := claims["user_id"]; ok {
-		c.Locals("user_id", uid)
+		switch v := uid.(type) {
+		case string:
+			c.Locals("user_id", v)
+		case float64:
+			c.Locals("user_id", fmt.Sprintf("%.0f", v))
+		}
+	}
+	if role, ok := claims["role"]; ok {
+		c.Locals("role", role)
 	}
 	return c.Next()
 }

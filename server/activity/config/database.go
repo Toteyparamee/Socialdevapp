@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 
+	"activity-service/models"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -20,5 +22,10 @@ func ConnectDatabase() {
 		log.Fatalf("failed to connect db: %v", err)
 	}
 	DB = db
+
+	if err := db.AutoMigrate(&models.Activity{}, &models.Registration{}, &models.Submission{}); err != nil {
+		log.Printf("auto-migrate warning: %v", err)
+	}
+
 	log.Println("activity db connected")
 }

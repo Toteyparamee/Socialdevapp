@@ -2,7 +2,7 @@
 
 ## High-Level Architecture (Microservices + Event-Driven)
 
-ระบบออกแบบเป็น **microservices** แยกตาม domain และสื่อสารกันแบบ async ผ่าน **Event Bus (Kafka / NATS)** สำหรับงานที่ไม่ต้องรอผลลัพธ์ทันที เช่น การแจ้งเตือน, การสร้างห้องแชทอัตโนมัติ และ analytics
+ระบบออกแบบเป็น **microservices** แยกตาม domain และสื่อสารกันแบบ async ผ่าน **Event Bus (Kafka / Redpanda)** สำหรับงานที่ไม่ต้องรอผลลัพธ์ทันที เช่น การแจ้งเตือน, การสร้างห้องแชทอัตโนมัติ และ analytics ระบบแชทใช้ **WebSocket** สำหรับ real-time messaging
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -15,36 +15,32 @@
 │  └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘ │
 │                                                                      │
 │  ┌────────────────────────────────────────────────────────────────┐│
-│  │  State: Provider (AuthService) · SharedPreferences              ││
+│  │  State: Provider (AuthService, ActivityService, ChatService,    ││
+│  │         ProblemService) · SharedPreferences                     ││
 │  │  Network: HTTP Client · WebSocket · Auth0 (flutter_appauth)     ││
 │  │  UI: google_maps_flutter · image_picker · geolocator            ││
 │  └────────────────────────────────────────────────────────────────┘│
 └──────────────────────────────┬──────────────────────────────────────┘
                                │ HTTPS / WSS
                                ▼
-                    ┌────────────────────────────────────┐
-                    │   API Gateway (Kong / Traefik)      │
-                    │   Routing · JWT verify · Rate limit │
-                    └─────────────────┬──────────────────┘
-                                      │
    ┌────────────┬──────────┬──────────┬──────────┬───────────┐
    ▼            ▼          ▼          ▼          ▼           ▼
 ┌───────┐  ┌────────┐ ┌────────┐ ┌───────┐  ┌───────┐  ┌────────┐
 │ Auth  │  │Problem │ │Activity│ │ Image │  │ Chat  │  │  Auth0 │
 │ :8080 │  │ :8083  │ │ :8084  │ │ :8081 │  │ :8085 │  │  OIDC  │
 └───┬───┘  └───┬────┘ └───┬────┘ └───┬───┘  └───┬───┘  └────────┘
-    │          │          │          │          │
+    │          │          │          │      WS + REST
     ▼          ▼          ▼          ▼          ▼
 ┌───────┐ ┌──────────┐ ┌────────┐ ┌──────┐  ┌──────────┐
-│  PG   │ │PG+PostGIS│ │   PG   │ │MinIO │  │ PG+Redis │
-│ users │ │ problems │ │activity│ │+meta │  │  (ws)    │
+│  PG   │ │PG+PostGIS│ │   PG   │ │MinIO │  │    PG    │
+│ users │ │ problems │ │activity│ │+meta │  │  (chat)  │
 └───────┘ └──────────┘ └────────┘ └──────┘  └──────────┘
     │          │          │          │          │
     └──────┬───┴──────────┴──────────┴──────────┘
                      │ publish / subscribe events
                      ▼
         ┌────────────────────────────────────────┐
-        │       EVENT BUS  (Kafka / NATS)         │
+        │       EVENT BUS  (Redpanda / Kafka)     │
         │                                          │
         │  user.registered                         │
         │  problem.created · problem.status.changed│
@@ -66,14 +62,13 @@
 
 | Service | Port | Responsibility | Data Store |
 |---------|------|----------------|------------|
-| **API Gateway** | 80/443 | Single entry, routing, JWT verify, rate limit | - |
 | **Auth Service** | 8080 | Register / Login / Google OAuth / JWT / Profile | Postgres |
-| **Problem Service** | 8083 | CRUD ปัญหาชุมชน + PostGIS query | Postgres + PostGIS |
-| **Activity Service** | 8084 | กิจกรรมโรงเรียน, ลงทะเบียน, ส่งงาน, ตรวจงาน | Postgres |
 | **Image Service** | 8081 | Upload / Presign รูปทุกประเภท | MinIO + Postgres |
-| **Chat Service** | 8085 | WebSocket, ห้องแชท auto-create เมื่อนักเรียนทักครู | Postgres + Redis |
-| **Notification** | 8086 | Push (FCM), Email — consume events | Redis queue |
-| **Analytics** | 8087 | สรุปสถิติ, dashboard — consume events | ClickHouse |
+| **Problem Service** | 8083 | CRUD ปัญหาชุมชน + PostGIS query | Postgres + PostGIS |
+| **Activity Service** | 8084 | กิจกรรมโรงเรียน, ลงทะเบียน, ถอนลงทะเบียน, ส่งงาน, ตรวจงาน, ครูผู้ดูแล | Postgres |
+| **Chat Service** | 8085 | WebSocket real-time + REST fallback, ห้องแชท auto-create, ส่งรูปในแชท | Postgres |
+| **Notification** | 8086 | Push (FCM), Email — consume events | - |
+| **Analytics** | 8087 | สรุปสถิติ, dashboard — consume events | Postgres |
 
 ### Event Topics
 
@@ -88,6 +83,32 @@
 | `chat.message.sent` | Chat | Notification (push offline user) |
 | `image.uploaded` | Image | Problem / Activity (link metadata) |
 
+### WebSocket Chat Flow
+
+```
+[Student/Teacher opens chat]
+     │
+     ├─ Flutter connects: ws://host:8085/ws?token=<JWT>
+     │
+     ├─ Server authenticates JWT from query param
+     │   └─ Registers connection in Hub (userID → Set<Conn>)
+     │   └─ Sends {"type": "connected", "user_id": "3"}
+     │
+     ├─ Client sends: {"type": "send_message", "payload": {"to_user_id": "1", "content": "สวัสดี"}}
+     │
+     ├─ Server:
+     │   ├─ findOrCreateRoom(sender, receiver)
+     │   ├─ INSERT message INTO DB
+     │   ├─ publish chat.message.sent (Kafka)
+     │   └─ Broadcast {"type": "new_message", "message": {...}}
+     │       ├─ → room.UserA (all connections)
+     │       └─ → room.UserB (all connections)
+     │
+     └─ Client receives new_message → displays in chat instantly
+```
+
+**Fallback:** ถ้า WebSocket ยังไม่ connected จะ fallback ใช้ REST API `POST /api/chat/messages` แทน แล้ว broadcast ผ่าน WebSocket Hub ให้อีกฝั่ง
+
 ### Auto-Create Chat Room (นักเรียนทักครู)
 
 ```
@@ -98,94 +119,46 @@
                             │     │           └─ publish chat.room.created
                             │     └─ มี     → reuse ห้องเดิม
                             ├─ บันทึกข้อความลง DB
-                            ├─ broadcast ผ่าน WebSocket ให้ครู (ถ้า online)
+                            ├─ broadcast ผ่าน WebSocket ให้ทั้ง 2 ฝั่ง (ถ้า online)
                             └─ publish chat.message.sent
                                          │
                                          ▼
                                 Notification Service
                                          │
-                                         └─ ครู offline → ส่ง FCM push
-```
-
-### Saga ตัวอย่าง: ครูตรวจงานนักเรียน
-
-```
-Activity Service: ครูกด "ผ่าน"
-   │
-   ├─ UPDATE submission SET status='passed'
-   └─ publish submission.reviewed
-            │
-            ├──► Notification: push แจ้งนักเรียน
-            ├──► Chat: ส่งข้อความ feedback อัตโนมัติเข้าห้องครู↔นักเรียน
-            └──► Analytics: บันทึกสถิติการผ่าน/ไม่ผ่าน
+                                         └─ ฝั่งไม่ online → ส่ง FCM push
 ```
 
 ### Communication Patterns
 
 | รูปแบบ | ใช้เมื่อ | ตัวอย่าง |
 |--------|---------|---------|
-| **Sync (REST/gRPC)** | ต้องการผลลัพธ์ทันที | Client → Gateway → Service |
-| **Async (Event Bus)** | งานที่ไม่ต้องรอ มี consumer หลายตัว | Notification, Analytics, Audit |
-| **WebSocket** | Real-time bi-directional | Chat Service |
+| **Sync (REST)** | ต้องการผลลัพธ์ทันที | Client → Service (CRUD) |
+| **Async (Event Bus)** | งานที่ไม่ต้องรอ มี consumer หลายตัว | Notification, Analytics |
+| **WebSocket** | Real-time bi-directional | Chat Service (send + receive messages) |
 
-### Cross-Cutting Concerns
+### Implementation Status
 
-- **Auth:** JWT ออกจาก Auth Service, ทุก service share `JWT_SECRET` หรือใช้ JWKS
-- **Service Discovery:** Consul / Kubernetes DNS
-- **Observability:** OpenTelemetry → Jaeger (trace) + Prometheus/Grafana (metric) + Loki (log)
-- **Resilience:** Circuit breaker, retry, dead-letter queue
-- **Database per Service:** ห้าม service อื่นเข้า DB ข้าม domain — ต้องผ่าน API/Event เท่านั้น
-- **Deployment:** Docker + Kubernetes, แต่ละ service deploy อิสระ
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Auth Service `:8080` | ✅ | publishes `user.registered` |
+| Image Service `:8081` | ✅ | MinIO backend, presigned URLs |
+| Problem Service `:8083` | ✅ | publishes `problem.created`, `problem.status.changed` |
+| Activity Service `:8084` | ✅ | CRUD + register/unregister + submit + review + supervisor + map location |
+| Chat Service `:8085` | ✅ | **WebSocket real-time** + REST fallback + image messages |
+| Notification Service `:8086` | ✅ | consumes events, log-based (FCM/SMTP pending) |
+| Analytics Service `:8087` | ✅ | consumes all events → Postgres `event_log` + `event_counts`, `GET /stats` |
+| Event Bus | ✅ | Redpanda (Kafka API) via `segmentio/kafka-go` |
 
-### Architecture Overview
-ฝ
-| Layer | Technology | หน้าที่ |
-|-------|-----------|---------|
-| **Frontend** | Flutter (Dart) | Cross-platform mobile app (iOS, Android, Web) |
-| **State Management** | Provider + SharedPreferences | จัดการ auth state และ session persistence |
-| **API Communication** | HTTP + JWT Bearer Token | REST API calls ระหว่าง client-server |
-| **Backend** | Go Fiber v3 + GORM | REST API server, business logic, JWT auth |
-| **Authentication** | Auth0 + bcrypt + JWT | OAuth2 (Google) และ local email/password |
-| **Database** | PostgreSQL + PostGIS | เก็บข้อมูลผู้ใช้, ปัญหาชุมชน, กิจกรรม, location |
-| **Maps** | Google Maps API | แสดงแผนที่ + markers ตำแหน่งปัญหา |
+---
 
-### Data Flow
+## Tech Stack Summary
 
 ```
-[ผู้ใช้เปิดแอป]
-    │
-    ▼
-AuthGate ตรวจ token ใน SharedPreferences
-    │
-    ├── ไม่มี token ──► WelcomeScreen ──► LoginScreen
-    │                                        │
-    │                    ┌───────────────────┤
-    │                    ▼                   ▼
-    │              Local Login          Google Login
-    │              POST /auth/login     Auth0 → Google
-    │                    │              POST /auth/google
-    │                    │                   │
-    │                    └─────────┬─────────┘
-    │                              ▼
-    │                    Server ส่ง JWT token กลับ
-    │                    เก็บลง SharedPreferences
-    │                              │
-    └── มี token ◄────────────────┘
-         │
-         ▼
-    StudentScreen (Dashboard)
-         │
-         ├── Tab 0: MapScreen ──► GET /problems ──► แสดง markers
-         ├── Tab 1: Activities ──► GET /activities ──► รายการกิจกรรม
-         └── Tab 2: Profile ──► GET /user/profile ──► ข้อมูลผู้ใช้
-```
-
-### Tech Stack Summary
-
-```
-Frontend:  Flutter + Provider + Google Maps + Auth0
-Backend:   Go Fiber v3 + GORM + JWT + bcrypt
+Frontend:  Flutter + Provider + Google Maps + Auth0 + WebSocket
+Backend:   Go Fiber v3 + GORM + JWT + bcrypt + fasthttp/websocket
 Database:  PostgreSQL + PostGIS + uuid-ossp
+Storage:   MinIO (S3-compatible)
+Events:    Redpanda (Kafka API)
 Auth:      Auth0 (Google OAuth2) + Local (email/password)
 ```
 
@@ -193,80 +166,86 @@ Auth:      Auth0 (Google OAuth2) + Local (email/password)
 
 ## Project Structure
 
-## Entry Point
+### Entry Point
 
 ```
 main.dart
-  └─ CommunityReportApp (Provider wrapper)
+  └─ CommunityReportApp (Provider wrapper: AuthService, ActivityService, ChatService, ProblemService)
      └─ AuthGate (ตรวจสอบสถานะ login)
         ├─ ยังไม่ login → WelcomeScreen
-        └─ login แล้ว → HomeScreen
+        └─ login แล้ว → HomeScreen (ตาม role)
 ```
 
 ---
 
-## Screens (12 ไฟล์)
+## Screens
 
 | ไฟล์ | Widget | หน้าที่ |
 |------|--------|---------|
 | `welcome_screen.dart` | `WelcomeScreen` | Onboarding carousel 4 หน้า |
-| `login_screen.dart` | `LoginScreen` | เลือก role + ฟอร์ม login (นักเรียนใช้ Gmail) + Login with Google |
+| `login_screen.dart` | `LoginScreen` | เลือก role + ฟอร์ม login + Login with Google |
 | `register_screen.dart` | `RegisterScreen` | สมัครสมาชิก |
-| `map_screen.dart` | `MapHomeScreen` | Google Maps + markers ปัญหาชุมชน |
+| `map_screen.dart` | `MapHomeScreen` | Google Maps + custom markers ปัญหาชุมชน |
 | `problem_detail_screen.dart` | `ProblemDetailScreen` | รายละเอียดปัญหา |
 | `student/student_screen.dart` | `StudentScreen` | Dashboard นักเรียน + Bottom Navigation |
-| `student/school_activities_screen.dart` | `SchoolActivitiesScreen` | รายการกิจกรรมโรงเรียน + หน้ารายละเอียดกิจกรรม |
-| `student/my_registrations_screen.dart` | `MyRegistrationsScreen` | กิจกรรมที่นักเรียนลงทะเบียนไว้ |
-| `student/chat_screen.dart` | `ChatScreen` | ระบบแชทสำหรับนักเรียน |
-| `teacher/teacher_screen.dart` | `TeacherScreen` | Dashboard ครู + Bottom Navigation (กิจกรรมโรงเรียน / หน้าหลัก / โปรไฟล์) — เมนูลัด: เพิ่มกิจกรรม, ตรวจงานนักเรียน, แจ้งปัญหา, แชท |
-| `teacher/add_activity_screen.dart` | `AddActivityScreen` | ฟอร์มเพิ่มกิจกรรมใหม่สำหรับครู |
-| `teacher/review_works_screen.dart` | `ReviewWorksScreen` | ตรวจงานนักเรียน — ดูกิจกรรมที่ครูสร้าง, รายชื่อนักเรียนที่ส่งงาน, หน้ารายละเอียดงานนักเรียน + ปุ่มให้คะแนน ผ่าน/ไม่ผ่าน + ข้อเสนอแนะ |
-| `organization/organization_screen.dart` | `OrganizationScreen` | Dashboard หน่วยงาน + Bottom Navigation (แผนที่ / หน้าหลัก / โปรไฟล์) — เมนูลัด: เพิ่มกิจกรรม, ตรวจงานนักเรียน, แจ้งปัญหา, แชท |
+| `student/school_activities_screen.dart` | `SchoolActivitiesScreen` | รายการกิจกรรมโรงเรียน + ลงทะเบียน |
+| `student/my_registrations_screen.dart` | `MyRegistrationsScreen` | กิจกรรมที่ลงทะเบียน (API จริง) + ถอนการลงทะเบียน + แผนที่สถานที่ + ส่งงาน + แชทกับครู |
+| `student/chat_screen.dart` | `TicketListScreen` / `ChatRoomScreen` | ระบบแชท **WebSocket real-time** + ส่งรูปภาพ + REST fallback |
+| `teacher/teacher_screen.dart` | `TeacherScreen` | Dashboard ครู + Bottom Navigation |
+| `teacher/add_activity_screen.dart` | `AddActivityScreen` | ฟอร์มเพิ่มกิจกรรม + ปักหมุดแผนที่ + ครูผู้ดูแล + เบอร์ติดต่อ |
+| `teacher/review_works_screen.dart` | `ReviewWorksScreen` | ตรวจงานนักเรียน (API จริง) — ดูกิจกรรมที่สร้าง, submissions, ให้คะแนน ผ่าน/ไม่ผ่าน |
+| `organization/organization_screen.dart` | `OrganizationScreen` | Dashboard หน่วยงาน |
 
 ---
 
-## Models (1 ไฟล์)
+## Models
 
 **`models/problem_report.dart`**
-
-- `ProblemReport` - ข้อมูลปัญหา (id, title, description, location, status, ...)
+- `ProblemReport` - ข้อมูลปัญหา (id, title, description, location, status, imageUrls)
 - `ProblemCategory` enum: flood, trash, traffic, infrastructure, other
 - `ProblemStatus` enum: pending, inProgress, resolved
 - `ProblemSource` enum: user, government, urgent
-- `sampleProblems` - ข้อมูลตัวอย่าง 5 รายการ
+
+**`models/activity.dart`**
+- `Activity` - ข้อมูลกิจกรรม (id, teacherId, title, description, location, **latitude, longitude, supervisor, supervisorPhone**, startAt, endAt, maxSlots, imageIds)
+- `Registration` - ข้อมูลการลงทะเบียน + nested `Activity`
+- `Submission` - ข้อมูลการส่งงาน (id, content, imageIds, score, feedback, status, **studentId, activityId**)
+
+**`models/chat.dart`**
+- `ChatRoom` - ห้องแชท (id, userA, userB)
+- `ChatMessage` - ข้อความแชท (id, roomId, senderId, content, **imageId**, readAt)
 
 ---
 
-## Services (1 ไฟล์)
+## Services
+
+**`services/api_config.dart`**
+- `ApiConfig` - base URL ของแต่ละ service (auto-detect Android/iOS)
 
 **`services/auth_service.dart`**
+- `AuthService` (ChangeNotifier) - login/logout, JWT management
+- `login()`, `register()`, `loginWithGoogle()`
+- Properties: isLoggedIn, username, role, token, userId, avatarUrl, authHeaders
 
-- `AuthService` (ChangeNotifier) - จัดการ login/logout เชื่อมต่อ Backend API
-- `login()` - POST /auth/login (username + password)
-- `register()` - POST /auth/register (username + email + password + role)
-- `loginWithGoogle()` - Auth0 + POST /auth/google (access_token)
-- `AuthException` - custom exception class
-- เก็บ session ใน SharedPreferences (token, username, role, avatarUrl)
-- Properties: isLoggedIn, username, role, token, avatarUrl, isLoading, authHeaders
+**`services/problem_service.dart`**
+- `ProblemService` (ChangeNotifier) - CRUD ปัญหาชุมชน
+- `fetchProblems()`, `createProblem()`, `updateProblemStatus()`
 
----
+**`services/activity_service.dart`**
+- `ActivityService` (ChangeNotifier) - จัดการกิจกรรม
+- `fetchActivities()`, `createActivity()` (+ supervisor, location pin)
+- `registerForActivity()`, `unregister()`
+- `fetchMyRegistrations()`, `fetchMyActivitySubmissions()`
+- `submitWork()`, `reviewSubmission()`
+- `ActivityWithSubmissions` - model สำหรับครูดึงกิจกรรม+submissions
 
-## Theme (1 ไฟล์)
-
-**`theme/app_theme.dart`**
-
-- `AppTheme` - สี, gradient, border radius, shadow, ThemeData
-- Primary: #4A90D9 | Accent colors | Status colors | Marker colors
-
----
-
-## Widgets (3 ไฟล์)
-
-| ไฟล์ | Widget | หน้าที่ |
-|------|--------|---------|
-| `problem_bottom_sheet.dart` | `ProblemBottomSheet` | Preview card บนแผนที่ |
-| `filter_panel.dart` | `FilterPanel` | กรองหมวดหมู่ปัญหา |
-| `add_problem_sheet.dart` | `AddProblemSheet` | ฟอร์มแจ้งปัญหาใหม่ |
+**`services/chat_service.dart`**
+- `ChatService` (ChangeNotifier) - **WebSocket + REST fallback**
+- `connectWebSocket()` - เชื่อม ws://host:8085/ws?token=xxx
+- `sendMessageWs()` - ส่งผ่าน WS (fallback REST ถ้าไม่พร้อม)
+- `onMessage` stream - broadcast ข้อความใหม่ real-time
+- Auto-reconnect ทุก 3 วินาที + ping keep-alive ทุก 30 วินาที
+- `fetchRooms()`, `fetchMessages()`, `sendMessage()` (REST)
 
 ---
 
@@ -274,66 +253,143 @@ main.dart
 
 ```
 WelcomeScreen (onboarding 4 หน้า)
-  └─ [ข้าม / ถัดไป]
-     └─ LoginScreen
-        ├─ Page 1: เลือก Role (นักเรียน / ครู / หน่วยงาน)
-        └─ Page 2: กรอก Gmail + Password (นักเรียน) / อีเมล (ครู) / เบอร์โทรหรืออีเมล (หน่วยงาน) | Login with Google (Auth0)
-           └─ StudentScreen (Dashboard นักเรียน)
-              ├─ Tab 0: MapHomeScreen (แผนที่)
-              │  ├─ แตะ marker → ProblemBottomSheet
-              │  │  └─ ดูเพิ่ม → ProblemDetailScreen
-              │  └─ ปุ่ม Filter → FilterPanel
-              ├─ Tab 1: ActivityTab (กิจกรรม)
-              │  └─ เมนู กิจกรรมโรงเรียน → SchoolActivitiesScreen
-              │     └─ แตะ card กิจกรรม → ActivityDetailScreen (รายละเอียด + ลงทะเบียน)
-              └─ Tab 2: ProfileTab (โปรไฟล์)
-                 └─ Logout → กลับ WelcomeScreen
-
-TeacherScreen (Dashboard ครู)
-  ├─ Tab 0: SchoolActivitiesScreen
-  ├─ Tab 1: HomeTab (แบนเนอร์ + เมนูลัด + ปฏิทิน)
-  │   ├─ เพิ่มกิจกรรม → AddActivityScreen
-  │   └─ ตรวจงานนักเรียน → ReviewWorksScreen
-  │       └─ แตะ card กิจกรรม → SubmissionsScreen (รายชื่อนักเรียนที่ส่งงาน)
-  │           └─ แตะชื่อนักเรียน → StudentWorkDetailScreen
-  │               ├─ ดูข้อมูลนักเรียน + เนื้อหางาน
-  │               ├─ กรอกคะแนน + ข้อเสนอแนะ
-  │               └─ ปุ่ม ผ่าน / ไม่ผ่าน (บังคับกรอกข้อเสนอแนะเมื่อไม่ผ่าน)
-  └─ Tab 2: ProfileTab
-
-OrganizationScreen (Dashboard หน่วยงาน)
-  ├─ Tab 0: MapHomeScreen (แผนที่)
-  ├─ Tab 1: HomeTab (แบนเนอร์ + เมนูลัด + ปฏิทิน)
-  │   ├─ เพิ่มกิจกรรม → AddActivityScreen
-  │   ├─ ตรวจงานนักเรียน → ReviewWorksScreen
-  │   └─ แชท → TicketListScreen
-  └─ Tab 2: ProfileTab
+  └─ LoginScreen
+     └─ เลือก Role → Login
+        │
+        ├─ StudentScreen (Dashboard นักเรียน)
+        │  ├─ Tab 0: MapHomeScreen (แผนที่ + markers)
+        │  ├─ Tab 1: ActivityTab
+        │  │  ├─ กิจกรรมโรงเรียน → SchoolActivitiesScreen → ลงทะเบียน
+        │  │  └─ รายการลงทะเบียน → MyRegistrationsScreen (API จริง)
+        │  │     ├─ ดูรายละเอียด + แผนที่สถานที่
+        │  │     ├─ ส่งงาน (แนบไฟล์)
+        │  │     ├─ ถอนการลงทะเบียน
+        │  │     └─ แชทกับครู → ChatRoomScreen (WebSocket)
+        │  └─ Tab 2: ProfileTab → Logout
+        │
+        ├─ TeacherScreen (Dashboard ครู)
+        │  ├─ Tab 0: SchoolActivitiesScreen
+        │  ├─ Tab 1: HomeTab
+        │  │  ├─ เพิ่มกิจกรรม → AddActivityScreen (+ map pin + ครูผู้ดูแล)
+        │  │  ├─ ตรวจงานนักเรียน → ReviewWorksScreen (API จริง)
+        │  │  │   └─ กิจกรรมที่สร้าง → Submissions → ให้คะแนน ผ่าน/ไม่ผ่าน
+        │  │  └─ แชท → TicketListScreen → ChatRoomScreen (WebSocket)
+        │  └─ Tab 2: ProfileTab
+        │
+        └─ OrganizationScreen (Dashboard หน่วยงาน)
+           ├─ Tab 0: MapHomeScreen
+           ├─ Tab 1: HomeTab (เมนูลัด)
+           └─ Tab 2: ProfileTab
 ```
 
 ---
 
-## Auth Config (Flutter ↔ Auth0 ↔ Backend)
+## Backend API Endpoints
 
-| ค่า | ที่อยู่ |
-|-----|--------|
-| Auth0 Domain | `dev-p6m40iaxhz0i543y.us.auth0.com` |
-| Auth0 Client ID | `tiHEUCuLCaE03SyInMkyRVLPgxZopy7s` |
-| Redirect URI | `com.socialdev.app://login-callback` |
-| Backend URL | `http://10.0.2.2:8080` (Android) / `http://localhost:8080` (iOS) |
-| Android config | `build.gradle.kts` → `appAuthRedirectScheme` |
-| iOS config | `Info.plist` → `CFBundleURLSchemes` |
+### Auth Service (`:8080`)
+
+| Method | Path | หน้าที่ | Auth |
+|--------|------|---------|------|
+| POST | `/auth/register` | สมัครสมาชิก | - |
+| POST | `/auth/login` | Login | - |
+| POST | `/auth/google` | Login ด้วย Google (Auth0) | - |
+| GET | `/user/profile` | ดูโปรไฟล์ | JWT |
+| PUT | `/user/profile` | อัพเดทโปรไฟล์ | JWT |
+
+### Image Service (`:8081`)
+
+| Method | Path | หน้าที่ | Auth |
+|--------|------|---------|------|
+| POST | `/api/images` | Upload รูป (multipart, max 30MB) | JWT |
+| GET | `/api/images` | List รูปของ user | JWT |
+| GET | `/api/images/:id` | ดู metadata | JWT |
+| GET | `/api/images/:id/url` | Presigned URL (15 นาที) | JWT |
+| DELETE | `/api/images/:id` | ลบรูป | JWT |
+
+### Problem Service (`:8083`)
+
+| Method | Path | หน้าที่ | Auth |
+|--------|------|---------|------|
+| GET | `/api/problems` | ดูรายการปัญหา | - |
+| GET | `/api/problems/:id` | ดูรายละเอียด | - |
+| POST | `/api/problems` | สร้างรายงานปัญหา | JWT |
+| PUT | `/api/problems/:id/status` | เปลี่ยนสถานะ | JWT |
+| DELETE | `/api/problems/:id` | ลบปัญหา | JWT |
+
+### Activity Service (`:8084`)
+
+| Method | Path | หน้าที่ | Auth |
+|--------|------|---------|------|
+| GET | `/api/activities` | ดูรายการกิจกรรม | - |
+| GET | `/api/activities/my-registrations` | รายการที่ลงทะเบียน (+ nested activity) | JWT |
+| GET | `/api/activities/my-submissions` | กิจกรรมของครู + submissions | JWT |
+| GET | `/api/activities/:id` | ดูรายละเอียดกิจกรรม | JWT |
+| POST | `/api/activities` | สร้างกิจกรรม (+ supervisor, lat/lng) | JWT |
+| POST | `/api/activities/:id/register` | ลงทะเบียน | JWT |
+| DELETE | `/api/activities/registrations/:regId` | **ถอนการลงทะเบียน** | JWT |
+| POST | `/api/activities/registrations/:regId/submit` | ส่งงาน | JWT |
+| PUT | `/api/activities/submissions/:subId/review` | ตรวจงาน + ให้คะแนน | JWT |
+
+### Chat Service (`:8085`)
+
+| Method | Path | หน้าที่ | Auth |
+|--------|------|---------|------|
+| GET | `/api/chat/rooms` | ดูห้องแชท | JWT |
+| POST | `/api/chat/messages` | ส่งข้อความ (+ image_id) REST fallback | JWT |
+| GET | `/api/chat/rooms/:roomId/messages` | ดูข้อความในห้อง | JWT |
+| WS | `/ws?token=<JWT>` | **WebSocket real-time messaging** | Query param |
+
+**WebSocket Events:**
+
+| Direction | Type | Payload |
+|-----------|------|---------|
+| Client → Server | `send_message` | `{to_user_id, content, image_id?}` |
+| Client → Server | `ping` | - |
+| Server → Client | `connected` | `{user_id}` |
+| Server → Client | `new_message` | `{message, room_id}` |
+| Server → Client | `pong` | - |
 
 ---
 
-## State Management
+## Database Schema
 
-- **Provider**: `AuthService` (ChangeNotifier) - สถานะ login ทั้งแอป
-- **Local State**: StatefulWidget + setState() - UI state ภายใน screen
-- **Persistence**: SharedPreferences - เก็บ session + JWT token
+**`server/postgres-init/`** — แยก schema ตาม service (database-per-service)
+
+### Activities Table
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | PK, auto-generate |
+| teacher_id | VARCHAR(64) | FK to user |
+| title | VARCHAR(255) | |
+| description | TEXT | |
+| location | VARCHAR(255) | ชื่อสถานที่ |
+| latitude | DOUBLE PRECISION | พิกัดแผนที่ |
+| longitude | DOUBLE PRECISION | พิกัดแผนที่ |
+| supervisor | VARCHAR(255) | ชื่อครูผู้ดูแล |
+| supervisor_phone | VARCHAR(50) | เบอร์ติดต่อ |
+| start_at | TIMESTAMPTZ | |
+| end_at | TIMESTAMPTZ | |
+| max_slots | INTEGER | จำนวนรับ |
+| image_ids | TEXT[] | |
+
+### Chat Messages Table
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | PK |
+| room_id | UUID | FK to rooms |
+| sender_id | VARCHAR(64) | |
+| content | TEXT | |
+| image_id | VARCHAR(255) | รูปภาพในแชท (FK to images) |
+| read_at | TIMESTAMPTZ | nullable |
+| created_at | TIMESTAMPTZ | |
 
 ---
 
 ## Dependencies หลัก
+
+### Flutter
 
 | Package | ใช้ทำอะไร |
 |---------|-----------|
@@ -342,18 +398,56 @@ OrganizationScreen (Dashboard หน่วยงาน)
 | `geolocator` | ตำแหน่งปัจจุบัน |
 | `shared_preferences` | เก็บ session |
 | `image_picker` | เลือกรูปจากกล้อง/แกลเลอรี |
-| `http` | HTTP client เรียก Backend API |
-| `flutter_appauth` | Auth0 / Google OAuth login |
+| `http` | HTTP client |
+| `web_socket_channel` | WebSocket client (chat) |
+| `http_parser` | MediaType for multipart upload |
+| `flutter_appauth` | Auth0 / Google OAuth |
+| `file_picker` | เลือกไฟล์ส่งงาน |
+
+### Go Backend
+
+| Package | ใช้ทำอะไร |
+|---------|-----------|
+| `gofiber/fiber/v3` | Web framework |
+| `fasthttp/websocket` | WebSocket server (chat) |
+| `golang-jwt/jwt/v5` | JWT auth |
+| `gorm.io/gorm` + `driver/postgres` | ORM + PostgreSQL |
+| `golang.org/x/crypto` | bcrypt |
+| `minio/minio-go/v7` | MinIO client (images) |
+| `segmentio/kafka-go` | Kafka client (events) |
+| `google/uuid` | UUID generation |
+
+---
+
+## Run Locally
+
+```bash
+# 1. Tidy Go modules
+cd server && ./bootstrap.sh && cd ..
+
+# 2. Bring up infrastructure + all services
+docker compose up --build
+
+# 3. Run Flutter app
+cd app && flutter run
+```
+
+### UIs
+- Redpanda Console — http://localhost:8088
+- MinIO Console — http://localhost:9001 (`minioadmin` / `minioadmin`)
+- Analytics stats — http://localhost:8087/stats
 
 ---
 
 ## File Tree
 
 ```
-lib/
+app/lib/
 ├── main.dart
 ├── models/
-│   └── problem_report.dart
+│   ├── problem_report.dart
+│   ├── activity.dart          # Activity + Registration + Submission
+│   └── chat.dart              # ChatRoom + ChatMessage (+ imageId)
 ├── screens/
 │   ├── welcome_screen.dart
 │   ├── login_screen.dart
@@ -363,320 +457,40 @@ lib/
 │   ├── student/
 │   │   ├── student_screen.dart
 │   │   ├── school_activities_screen.dart
-│   │   ├── my_registrations_screen.dart
-│   │   └── chat_screen.dart
+│   │   ├── my_registrations_screen.dart   # API จริง + ถอนลงทะเบียน
+│   │   └── chat_screen.dart               # WebSocket real-time
 │   ├── teacher/
 │   │   ├── teacher_screen.dart
-│   │   ├── add_activity_screen.dart
-│   │   └── review_works_screen.dart
+│   │   ├── add_activity_screen.dart       # + map pin + ครูผู้ดูแล
+│   │   └── review_works_screen.dart       # API จริง + ตรวจงาน
 │   └── organization/
 │       └── organization_screen.dart
 ├── services/
-│   └── auth_service.dart
+│   ├── api_config.dart
+│   ├── auth_service.dart
+│   ├── problem_service.dart
+│   ├── activity_service.dart              # + unregister + fetchMyActivitySubmissions
+│   └── chat_service.dart                  # WebSocket + REST fallback
 ├── theme/
 │   └── app_theme.dart
 └── widgets/
     ├── problem_bottom_sheet.dart
     ├── filter_panel.dart
     └── add_problem_sheet.dart
+
+server/
+├── login/          # Auth Service :8080
+├── image/          # Image Service :8081 (MinIO)
+├── problem/        # Problem Service :8083
+├── activity/       # Activity Service :8084
+├── chat/           # Chat Service :8085 (WebSocket + REST)
+│   └── handlers/
+│       ├── chat.go   # REST handlers
+│       └── ws.go     # WebSocket Hub + handler
+├── notification/   # Notification Service :8086
+├── analytics/      # Analytics Service :8087
+├── shared/         # Shared event library (Kafka)
+├── postgres-init/  # Database init scripts
+├── docker-compose.yml
+└── Dockerfile
 ```
-
-**รวมทั้งหมด: 20 ไฟล์ .dart**
-
----
-
-# Backend - Login Service (Go Fiber v3)
-
-## Entry Point
-
-```
-server/login/main.go
-  └─ Load .env
-  └─ Connect SQLite database
-  └─ Auto migrate User model
-  └─ Start Fiber server (:8080)
-```
-
----
-
-## โครงสร้างโฟลเดอร์
-
-```
-server/login/
-├── main.go                 # Entry point
-├── go.mod / go.sum         # Dependencies
-├── .env.example            # ตัวอย่าง environment variables
-├── .gitignore
-├── config/
-│   ├── database.go         # GORM + SQLite connection
-│   ├── auth0.go            # Auth0 config (domain, client_id)
-│   └── jwt.go              # JWT secret
-├── models/
-│   └── user.go             # User model + AutoMigrate
-├── handlers/
-│   ├── auth.go             # Register, Login, GoogleLogin handlers
-│   └── user.go             # GetProfile, UpdateProfile handlers
-├── middleware/
-│   └── jwt.go              # JWT authentication middleware
-└── routes/
-    └── routes.go           # Route setup (auth + user groups)
-```
-
----
-
-## API Endpoints
-
-### Public (ไม่ต้อง login)
-
-| Method | Path | หน้าที่ |
-|--------|------|---------|
-| GET | `/health` | Health check |
-| POST | `/auth/register` | สมัครสมาชิก (username + email + password + role) |
-| POST | `/auth/login` | Login ธรรมดา (username + password) |
-| POST | `/auth/google` | Login ด้วย Google ผ่าน Auth0 (access_token + role) |
-
-### Protected (ต้องส่ง JWT ใน header)
-
-| Method | Path | หน้าที่ |
-|--------|------|---------|
-| GET | `/user/profile` | ดึงข้อมูลโปรไฟล์ |
-| PUT | `/user/profile` | อัพเดทโปรไฟล์ (username, role) |
-
----
-
-## Auth Flow
-
-```
-[แบบธรรมดา]
-Flutter → POST /auth/register → สร้าง user + hash password → JWT
-Flutter → POST /auth/login    → ตรวจ password (bcrypt)     → JWT
-
-[แบบ Google]
-Flutter → Auth0 → Google → ได้ access_token
-Flutter → POST /auth/google → Server verify กับ Auth0 /userinfo
-       → สร้าง/อัพเดท user อัตโนมัติ → JWT
-
-ทั้ง 2 แบบได้ JWT เหมือนกัน → ใช้เรียก API protected routes
-```
-
----
-
-## User Model
-
-| Field | Type | หมายเหตุ |
-|-------|------|----------|
-| id | uint | Primary key |
-| username | string | Unique |
-| email | string | Unique |
-| password | string | bcrypt hash (เฉพาะ local) |
-| role | string | นักเรียน / ครู / หน่วยงาน |
-| provider | string | `local` หรือ `google` |
-| google_id | string | Google sub ID |
-| avatar_url | string | รูปโปรไฟล์จาก Google |
-| created_at | time | |
-| updated_at | time | |
-
----
-
-## Dependencies (Go)
-
-| Package | ใช้ทำอะไร |
-|---------|-----------|
-| `gofiber/fiber/v3` | Web framework |
-| `golang-jwt/jwt/v5` | สร้าง/verify JWT |
-| `gorm.io/gorm` | ORM |
-| `gorm.io/driver/sqlite` | SQLite database |
-| `golang.org/x/crypto` | bcrypt hash password |
-| `joho/godotenv` | Load .env file |
-
----
-
-# Database Schema (PostgreSQL)
-
-**`server/schema/schema.sql`**
-
-## Tables
-
-| Table | หน้าที่ |
-|-------|---------|
-| `users` | ข้อมูลผู้ใช้ (username, email, password, role, provider, google_id, avatar_url) |
-| `problem_reports` | รายงานปัญหาชุมชน + PostGIS location |
-| `problem_images` | รูปภาพปัญหา (1 ปัญหามีได้หลายรูป) |
-| `school_activities` | กิจกรรมโรงเรียน |
-| `activity_registrations` | ลงทะเบียนกิจกรรม (user ↔ activity) |
-
-## Enum Types
-
-| Type | ค่า |
-|------|-----|
-| `user_role` | นักเรียน, ครู, หน่วยงาน |
-| `auth_provider` | local, google |
-| `problem_category` | flood, trash, traffic, infrastructure, other |
-| `problem_status` | pending, in_progress, resolved |
-| `problem_source` | user, government, urgent |
-
-## Extensions
-
-- `uuid-ossp` - สร้าง UUID
-- `postgis` - รองรับ location (lat/lng)
-
----
-
-# Backend - Image Service (Go Fiber v3 + MinIO)
-
-Service แยกสำหรับจัดการรูปภาพทั้งหมดของระบบ (รูปปัญหา, รูปโปรไฟล์, รูปกิจกรรม) เก็บไฟล์จริงไว้ที่ MinIO และเก็บ metadata ไว้ใน PostgreSQL ตัวเดียวกับ login service
-
-## หลักการทำงาน
-
-```
-[Flutter Client]
-     │  1. login กับ login service (:8080) → ได้ JWT
-     │
-     │  2. แนบ Authorization: Bearer <JWT> มาที่ image service (:8081)
-     ▼
-[Image Service]
-     │
-     ├─ JWT Middleware  ── verify ด้วย JWT_SECRET เดียวกับ login service
-     │                     (stateless ไม่ต้องคุยกับ login service)
-     │                     ดึง user_id จาก claims ใส่ c.Locals
-     │
-     ├─ Handler         ── validate (ขนาด ≤5MB, mime: jpeg/png/webp)
-     │
-     ├─ Storage Service ── PutObject ขึ้น MinIO ที่ key: {folder}/{uuid}.{ext}
-     │                                     │
-     │                                     ▼
-     │                              [MinIO Bucket]
-     │
-     └─ GORM            ── บันทึก metadata (id, owner_id, key, url, mime, size)
-                                            │
-                                            ▼
-                                    [PostgreSQL: images]
-```
-
-**จุดสำคัญ**
-- ไฟล์จริงเก็บที่ **MinIO** เท่านั้น — DB เก็บแค่ metadata + key
-- ทุก endpoint (ยกเว้น `/health`) อยู่หลัง JWT middleware
-- ทุก query กรอง `owner_id` เสมอ → user เห็นและลบได้เฉพาะรูปของตัวเอง
-- ใช้ **presigned URL** (TTL 15 นาที) เวลาให้ client โหลดรูปจาก private bucket
-
-## โครงสร้างโฟลเดอร์
-
-```
-server/image/
-├── main.go                 # Entry point (:8081) - load env, init MinIO + DB
-├── go.mod / go.sum
-├── .env.example
-├── config/
-│   ├── minio.go            # init MinIO client + ensure bucket
-│   ├── database.go         # GORM + Postgres + AutoMigrate(Image)
-│   └── jwt.go              # อ่าน JWT_SECRET (ต้องตรงกับ login service)
-├── models/
-│   └── image.go            # Image metadata model
-├── services/
-│   ├── storage.go          # Upload / Delete / Presign (wrap minio-go)
-│   └── env.go              # helper อ่าน env
-├── handlers/
-│   └── image.go            # Upload / List / Get / Presign / Delete
-├── middleware/
-│   └── jwt.go              # ตรวจ JWT (ออกโดย login service)
-└── routes/
-    └── routes.go           # /api/images group
-```
-
-## API Endpoints
-
-ทุก endpoint ต้องส่ง `Authorization: Bearer <JWT>` (ยกเว้น `/health`)
-
-| Method | Path | หน้าที่ |
-|--------|------|---------|
-| GET | `/health` | Health check |
-| POST | `/api/images` | Upload รูป (multipart `file` + optional `folder`) → คืน metadata |
-| GET | `/api/images` | List รูปทั้งหมดของ user ปัจจุบัน |
-| GET | `/api/images/:id` | ดู metadata รูป |
-| GET | `/api/images/:id/url` | ขอ presigned URL (15 นาที) |
-| DELETE | `/api/images/:id` | ลบรูปทั้งใน MinIO และ DB |
-
-**ข้อจำกัดการอัปโหลด**
-- ขนาดไม่เกิน 5MB
-- รับเฉพาะ `image/jpeg`, `image/png`, `image/webp`
-
-## Image Model
-
-| Field | Type | หมายเหตุ |
-|-------|------|----------|
-| id | uuid | Primary key |
-| owner_id | string | user_id จาก JWT claims |
-| key | string | path ใน MinIO เช่น `problems/abc.jpg` (unique) |
-| url | string | public URL (ถ้า bucket เปิด public) |
-| folder | string | sub-folder ใน bucket |
-| mime | string | content type |
-| size | int64 | bytes |
-| created_at | time | |
-
-## Auth Flow ระหว่าง 2 services
-
-```
-[Client] ──login──► [login service :8080] ──ออก JWT──► [Client]
-                          │
-                          │ ใช้ JWT_SECRET เดียวกัน
-                          ▼
-[Client] ──Bearer JWT──► [image service :8081]
-                          │
-                          └─ verify signature (ไม่ต้องเรียก login service)
-                             ดึง user_id ใช้เป็น owner_id
-```
-
-> **เงื่อนไข:** `JWT_SECRET` ใน `.env` ของ image service ต้องตรงกับของ login service เป๊ะ ๆ ไม่งั้น verify ไม่ผ่าน
-
-## ENV ที่ต้องตั้ง
-
-```env
-PORT=8081
-
-# MinIO
-MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_BUCKET=socialdev-images
-MINIO_USE_SSL=false
-MINIO_PUBLIC_URL=http://localhost:9000
-
-# Postgres (ใช้ DB เดียวกับ login service)
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=socialdev
-
-# JWT (ต้องตรงกับ login service)
-JWT_SECRET=default-secret-change-me
-```
-
-## วิธีรัน
-
-```bash
-# 1. รัน MinIO (Docker)
-docker run -d -p 9000:9000 -p 9001:9001 \
-  -e MINIO_ROOT_USER=minioadmin \
-  -e MINIO_ROOT_PASSWORD=minioadmin \
-  minio/minio server /data --console-address ":9001"
-
-# 2. รัน image service
-cd server/image
-cp .env.example .env
-go mod tidy
-go run main.go
-```
-
-## Dependencies (Go)
-
-| Package | ใช้ทำอะไร |
-|---------|-----------|
-| `gofiber/fiber/v3` | Web framework |
-| `minio/minio-go/v7` | MinIO client (S3-compatible) |
-| `golang-jwt/jwt/v5` | verify JWT จาก login service |
-| `gorm.io/gorm` + `driver/postgres` | ORM + Postgres |
-| `google/uuid` | สร้าง UUID สำหรับ key |
-| `joho/godotenv` | Load .env file |
-
-เพิ่มเติมตอนนี้มีระบบสร้างเเชทอัตโนมัติใช่ไหม คืออยากให้ถ้านักเรียนทักเเชทกับครูค่อยขึ้นเเชทครู

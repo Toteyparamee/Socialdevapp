@@ -7,6 +7,8 @@ import (
 	"login-service/config"
 	"login-service/routes"
 
+	"socialdev/shared/events"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/joho/godotenv"
 )
@@ -19,6 +21,10 @@ func main() {
 
 	// Connect database
 	config.ConnectDatabase()
+
+	// Event bus
+	events.Init("auth-service")
+	defer events.Close()
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
 		AppName: "Login Service",

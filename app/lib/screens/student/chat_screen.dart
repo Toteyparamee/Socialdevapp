@@ -1,48 +1,17 @@
-import 'dart:math' as math;
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
-
-// ══════════════════════════════════════════════
-//  Mock Data
-// ══════════════════════════════════════════════
+import '../../models/chat.dart';
+import '../../services/chat_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/api_config.dart';
 
 enum TicketStatus { open, inProgress, closed }
-
-class _TicketData {
-  final String id;
-  final String title;
-  final TicketStatus status;
-  final String lastMessage;
-  final String time;
-  final int unread;
-  final String adminName;
-
-  const _TicketData({
-    required this.id,
-    required this.title,
-    required this.status,
-    required this.lastMessage,
-    required this.time,
-    this.unread = 0,
-    this.adminName = 'แอดมิน',
-  });
-}
-
-class _ChatMessage {
-  final String text;
-  final bool isMe;
-  final String time;
-  final String? imageUrl;
-  final bool isRead;
-
-  const _ChatMessage({
-    required this.text,
-    required this.isMe,
-    required this.time,
-    this.imageUrl,
-    this.isRead = false,
-  });
-}
 
 // ══════════════════════════════════════════════
 //  1. Ticket List Screen (Inbox)
@@ -56,75 +25,35 @@ class TicketListScreen extends StatefulWidget {
   State<TicketListScreen> createState() => _TicketListScreenState();
 }
 
-class _TicketListScreenState extends State<TicketListScreen>
-    with SingleTickerProviderStateMixin {
-  bool _isLoading = true;
-  late AnimationController _shimmerController;
-
-  final _tickets = <_TicketData>[
-    _TicketData(
-      id: '1',
-      title: 'สอบถามรายละเอียดกิจกรรม',
-      status: TicketStatus.open,
-      lastMessage: 'ขอสอบถามเรื่องเวลาเริ่มกิจกรรมครับ',
-      time: '10:30',
-      unread: 2,
-      adminName: 'อ.สมชาย',
-    ),
-    _TicketData(
-      id: '2',
-      title: 'แจ้งปัญหาการลงทะเบียน',
-      status: TicketStatus.inProgress,
-      lastMessage: 'รับทราบครับ กำลังตรวจสอบให้',
-      time: 'เมื่อวาน',
-      unread: 0,
-      adminName: 'แอดมิน',
-    ),
-    _TicketData(
-      id: '3',
-      title: 'ขอเปลี่ยนกลุ่มกิจกรรม',
-      status: TicketStatus.closed,
-      lastMessage: 'เรียบร้อยแล้วครับ ขอบคุณที่แจ้ง',
-      time: '2 เม.ย.',
-      unread: 0,
-      adminName: 'อ.วิภา',
-    ),
-  ];
+class _TicketListScreenState extends State<TicketListScreen> {
+  Map<String, String> _names = {};
 
   @override
   void initState() {
     super.initState();
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-
-    // Simulate loading
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted) setState(() => _isLoading = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<ChatService>().fetchRooms();
+      await _loadNames();
     });
   }
 
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    super.dispose();
+  Future<void> _loadNames() async {
+    final auth = context.read<AuthService>();
+    final myId = auth.userId ?? '';
+    final rooms = context.read<ChatService>().rooms;
+    final ids = rooms.map((r) => r.userA == myId ? r.userB : r.userA).toSet().toList();
+    if (ids.isNotEmpty) {
+      final names = await auth.lookupUsers(ids);
+      if (mounted) setState(() => _names = names);
+    }
   }
-
-  Color _statusColor(TicketStatus s) => switch (s) {
-    TicketStatus.open => const Color(0xFF10B981),
-    TicketStatus.inProgress => const Color(0xFFFBBF24),
-    TicketStatus.closed => const Color(0xFF9CA3AF),
-  };
-
-  String _statusLabel(TicketStatus s) => switch (s) {
-    TicketStatus.open => 'เปิด',
-    TicketStatus.inProgress => 'กำลังดำเนินการ',
-    TicketStatus.closed => 'ปิดแล้ว',
-  };
 
   @override
   Widget build(BuildContext context) {
+    final chatService = context.watch<ChatService>();
+    final auth = context.read<AuthService>();
+    final rooms = chatService.rooms;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FB),
       appBar: AppBar(
@@ -142,73 +71,14 @@ class _TicketListScreenState extends State<TicketListScreen>
           child: Container(height: 1, color: const Color(0xFFF0F0F0)),
         ),
       ),
-      body: _isLoading
-          ? _buildSkeleton()
-          : _tickets.isEmpty
+      body: chatService.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : rooms.isEmpty
           ? _buildEmptyState()
-          : _buildTicketList(),
+          : _buildRoomList(rooms, auth),
     );
   }
 
-  // ── Skeleton Loading ──
-  Widget _buildSkeleton() {
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (context, _) {
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: 4,
-          itemBuilder: (context, index) {
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  // Avatar skeleton
-                  _shimmerBox(48, 48, isCircle: true),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _shimmerBox(14, 160),
-                        const SizedBox(height: 8),
-                        _shimmerBox(12, 220),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _shimmerBox(double h, double w, {bool isCircle = false}) {
-    final progress = _shimmerController.value;
-    final shimmerOpacity = 0.06 + 0.06 * math.sin(progress * math.pi * 2);
-    return Container(
-      height: h,
-      width: w,
-      decoration: BoxDecoration(
-        color: Color.lerp(
-          const Color(0xFFE8ECF0),
-          const Color(0xFFF3F4F6),
-          shimmerOpacity * 10,
-        ),
-        borderRadius: isCircle ? null : BorderRadius.circular(6),
-        shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
-      ),
-    );
-  }
-
-  // ── Empty State ──
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -246,49 +116,54 @@ class _TicketListScreenState extends State<TicketListScreen>
     );
   }
 
-  // ── Ticket List ──
-  Widget _buildTicketList() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _tickets.length,
-      itemBuilder: (context, index) {
-        final ticket = _tickets[index];
-        return _TicketTile(
-          ticket: ticket,
-          statusColor: _statusColor(ticket.status),
-          statusLabel: _statusLabel(ticket.status),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatRoomScreen(
-                ticketTitle: ticket.title,
-                status: ticket.status,
-                adminName: ticket.adminName,
+  Widget _buildRoomList(List<ChatRoom> rooms, AuthService auth) {
+    final myId = auth.userId ?? '';
+    return RefreshIndicator(
+      onRefresh: () => context.read<ChatService>().fetchRooms(),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: rooms.length,
+        itemBuilder: (context, index) {
+          final room = rooms[index];
+          final otherUser = room.userA == myId ? room.userB : room.userA;
+          final displayName = _names[otherUser] ?? otherUser;
+          return _RoomTile(
+            room: room,
+            otherUserName: displayName,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatRoomScreen(
+                  roomId: room.id,
+                  toUserId: otherUser,
+                  ticketTitle: widget.registrationTitle,
+                  adminName: displayName,
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
 
-// ── Ticket Tile Widget ──
-class _TicketTile extends StatelessWidget {
-  final _TicketData ticket;
-  final Color statusColor;
-  final String statusLabel;
+// ── Room Tile Widget ──
+class _RoomTile extends StatelessWidget {
+  final ChatRoom room;
+  final String otherUserName;
   final VoidCallback onTap;
 
-  const _TicketTile({
-    required this.ticket,
-    required this.statusColor,
-    required this.statusLabel,
+  const _RoomTile({
+    required this.room,
+    required this.otherUserName,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final timeStr =
+        '${room.updatedAt.hour.toString().padLeft(2, '0')}:${room.updatedAt.minute.toString().padLeft(2, '0')}';
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -297,12 +172,6 @@ class _TicketTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: ticket.unread > 0
-              ? Border.all(
-                  color: AppTheme.primary.withValues(alpha: 0.2),
-                  width: 1,
-                )
-              : null,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.03),
@@ -313,114 +182,45 @@ class _TicketTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Avatar
             Container(
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.12),
+                color: const Color(0xFF10B981).withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               child: Center(
                 child: Text(
-                  ticket.adminName.characters.first,
-                  style: TextStyle(
+                  otherUserName.isNotEmpty
+                      ? otherUserName[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: statusColor,
+                    color: Color(0xFF10B981),
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 14),
-            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          ticket.title,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: ticket.unread > 0
-                                ? FontWeight.w700
-                                : FontWeight.w600,
-                            color: AppTheme.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        ticket.time,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: ticket.unread > 0
-                              ? AppTheme.primary
-                              : Colors.grey.shade400,
-                          fontWeight: ticket.unread > 0
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    otherUserName,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      // Status dot
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: statusColor,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          ticket.lastMessage,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: ticket.unread > 0
-                                ? AppTheme.textPrimary
-                                : AppTheme.textSecondary,
-                            fontWeight: ticket.unread > 0
-                                ? FontWeight.w500
-                                : FontWeight.w400,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // Unread badge
-                      if (ticket.unread > 0) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${ticket.unread}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
+                  Text(
+                    timeStr,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
                   ),
                 ],
               ),
@@ -437,15 +237,19 @@ class _TicketTile extends StatelessWidget {
 // ══════════════════════════════════════════════
 
 class ChatRoomScreen extends StatefulWidget {
+  final String? roomId;
+  final String? toUserId;
   final String ticketTitle;
-  final TicketStatus status;
   final String adminName;
+  final TicketStatus status;
 
   const ChatRoomScreen({
     super.key,
+    this.roomId,
+    this.toUserId,
     required this.ticketTitle,
-    required this.status,
     required this.adminName,
+    this.status = TicketStatus.open,
   });
 
   @override
@@ -459,47 +263,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   final _focusNode = FocusNode();
   bool _showSend = false;
 
-  final _messages = <_ChatMessage>[
-    _ChatMessage(
-      text: 'สวัสดีครับ มีอะไรให้ช่วยไหมครับ?',
-      isMe: false,
-      time: '10:00',
-    ),
-    _ChatMessage(
-      text: 'สวัสดีครับ อยากสอบถามเรื่องเวลาเริ่มกิจกรรมครับ',
-      isMe: true,
-      time: '10:02',
-      isRead: true,
-    ),
-    _ChatMessage(
-      text: 'กิจกรรมเริ่ม 9:00 น. ลงทะเบียนหน้างาน 8:30 น. ครับ',
-      isMe: false,
-      time: '10:05',
-    ),
-    _ChatMessage(
-      text: 'ต้องเตรียมอะไรไปบ้างครับ?',
-      isMe: true,
-      time: '10:06',
-      isRead: true,
-    ),
-    _ChatMessage(
-      text: '',
-      isMe: false,
-      time: '10:08',
-      imageUrl: 'https://picsum.photos/seed/chat1/400/300',
-    ),
-    _ChatMessage(
-      text: 'นี่คือรายการสิ่งของที่ต้องเตรียมครับ ดูจากรูปได้เลย',
-      isMe: false,
-      time: '10:08',
-    ),
-    _ChatMessage(
-      text: 'รับทราบครับ ขอบคุณมากครับ 🙏',
-      isMe: true,
-      time: '10:10',
-      isRead: false,
-    ),
-  ];
+  List<ChatMessage> _messages = [];
+  bool _isLoading = true;
+  String? _currentRoomId;
+  StreamSubscription<ChatMessage>? _wsSub;
+  String _resolvedName = '';
 
   late AnimationController _sendBtnController;
   late Animation<double> _sendBtnScale;
@@ -507,6 +275,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   @override
   void initState() {
     super.initState();
+    _currentRoomId = widget.roomId;
+
     _textController.addListener(() {
       final show = _textController.text.trim().isNotEmpty;
       if (show != _showSend) setState(() => _showSend = show);
@@ -519,33 +289,98 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     _sendBtnScale = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _sendBtnController, curve: Curves.elasticOut),
     );
+
+    _resolvedName = widget.adminName;
+
+    // Resolve real name if adminName looks like an ID
+    if (widget.toUserId != null && widget.toUserId!.isNotEmpty) {
+      context.read<AuthService>().lookupUsers([widget.toUserId!]).then((names) {
+        if (mounted) {
+          setState(() => _resolvedName = names[widget.toUserId] ?? widget.adminName);
+        }
+      });
+    }
+
+    // Connect WebSocket & listen for new messages
+    final chatService = context.read<ChatService>();
+    chatService.connectWebSocket();
+    _wsSub = chatService.onMessage.listen(_onNewMessage);
+
+    _initRoom();
   }
 
-  @override
-  void dispose() {
-    _textController.dispose();
-    _scrollController.dispose();
-    _focusNode.dispose();
-    _sendBtnController.dispose();
-    super.dispose();
+  Future<void> _initRoom() async {
+    debugPrint('[chat] _initRoom: _currentRoomId=$_currentRoomId toUserId=${widget.toUserId}');
+
+    if (_currentRoomId != null) {
+      await _loadMessages();
+      return;
+    }
+
+    final chatService = context.read<ChatService>();
+    final myId = context.read<AuthService>().userId ?? '';
+    final toId = widget.toUserId ?? '';
+
+    debugPrint('[chat] _initRoom: myId="$myId" toId="$toId"');
+
+    if (toId.isEmpty) {
+      debugPrint('[chat] _initRoom: toId is empty, skip');
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    // Fetch rooms and find matching one
+    await chatService.fetchRooms();
+    debugPrint('[chat] _initRoom: myId="$myId" toId="$toId" rooms=${chatService.rooms.length}');
+    for (final room in chatService.rooms) {
+      debugPrint('[chat] room: id=${room.id} userA="${room.userA}" userB="${room.userB}"');
+      if ((room.userA == myId && room.userB == toId) ||
+          (room.userA == toId && room.userB == myId)) {
+        _currentRoomId = room.id;
+        break;
+      }
+    }
+    debugPrint('[chat] resolved roomId=$_currentRoomId');
+
+    await _loadMessages();
   }
 
-  void _sendMessage() {
-    final text = _textController.text.trim();
-    if (text.isEmpty) return;
+  void _onNewMessage(ChatMessage msg) {
+    debugPrint(
+      '[chat] new_message: roomId=${msg.roomId} currentRoom=$_currentRoomId',
+    );
 
-    setState(() {
-      _messages.add(
-        _ChatMessage(
-          text: text,
-          isMe: true,
-          time: TimeOfDay.now().format(context),
-        ),
-      );
-      _textController.clear();
-    });
+    // Accept message if: same room, OR no room yet (first message)
+    if (_currentRoomId != null && msg.roomId != _currentRoomId) return;
 
-    // Scroll to bottom
+    // Avoid duplicates
+    if (_messages.any((m) => m.id == msg.id)) return;
+
+    _currentRoomId ??= msg.roomId;
+
+    setState(() => _messages.add(msg));
+    _scrollToBottom();
+  }
+
+  Future<void> _loadMessages() async {
+    if (_currentRoomId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    final msgs = await context.read<ChatService>().fetchMessages(
+      _currentRoomId!,
+    );
+    if (mounted) {
+      setState(() {
+        _messages = msgs;
+        _isLoading = false;
+      });
+      _scrollToBottom();
+    }
+  }
+
+  void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -557,20 +392,109 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     });
   }
 
-  Color _statusColor(TicketStatus s) => switch (s) {
-    TicketStatus.open => const Color(0xFF10B981),
-    TicketStatus.inProgress => const Color(0xFFFBBF24),
-    TicketStatus.closed => const Color(0xFF9CA3AF),
-  };
+  @override
+  void dispose() {
+    _wsSub?.cancel();
+    _textController.dispose();
+    _scrollController.dispose();
+    _focusNode.dispose();
+    _sendBtnController.dispose();
+    super.dispose();
+  }
 
-  String _statusLabel(TicketStatus s) => switch (s) {
-    TicketStatus.open => 'เปิด',
-    TicketStatus.inProgress => 'กำลังดำเนินการ',
-    TicketStatus.closed => 'ปิดแล้ว',
-  };
+  void _sendMessage() {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+
+    _textController.clear();
+
+    final toUserId = widget.toUserId;
+    if (toUserId == null) return;
+
+    // Send via WebSocket (falls back to REST automatically)
+    context.read<ChatService>().sendMessageWs(
+      toUserId: toUserId,
+      content: text,
+    );
+  }
+
+  Future<void> _pickAndSendImage() async {
+    final toUserId = widget.toUserId;
+    if (toUserId == null) return;
+
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (picked == null) return;
+
+    try {
+      // Upload to image service
+      final uri = Uri.parse('${ApiConfig.imageUrl}/api/images');
+      final request = http.MultipartRequest('POST', uri);
+      final auth = context.read<AuthService>();
+      request.headers.addAll(auth.authHeaders);
+      request.fields['folder'] = 'chat';
+
+      final bytes = await picked.readAsBytes();
+      final ext = picked.path.split('.').last.toLowerCase();
+      final mime = ext == 'png'
+          ? 'image/png'
+          : ext == 'webp'
+          ? 'image/webp'
+          : 'image/jpeg';
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: picked.name,
+          contentType: MediaType.parse(mime),
+        ),
+      );
+
+      final streamed = await request.send();
+      if (streamed.statusCode != 201) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('อัปโหลดรูปไม่สำเร็จ')));
+        }
+        return;
+      }
+
+      final respBody = await streamed.stream.bytesToString();
+      final imgData = jsonDecode(respBody);
+      final imageId = imgData['id'] as String;
+
+      // Send message with image via WebSocket
+      if (!mounted) return;
+      context.read<ChatService>().sendMessageWs(
+        toUserId: toUserId,
+        content: '',
+        imageId: imageId,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('เชื่อมต่อ image service ไม่ได้'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _formatTime(DateTime dt) {
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final myId = context.read<AuthService>().userId ?? '';
+
     if (_showSend) {
       _sendBtnController.forward();
     } else {
@@ -579,7 +503,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
-      // ── Header ──
       appBar: AppBar(
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,
@@ -588,7 +511,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
         titleSpacing: 0,
         title: Row(
           children: [
-            // Admin avatar
             Container(
               width: 36,
               height: 36,
@@ -598,7 +520,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
               ),
               child: Center(
                 child: Text(
-                  widget.adminName.characters.first,
+                  _resolvedName.isNotEmpty
+                      ? _resolvedName[0].toUpperCase()
+                      : '?',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -609,40 +533,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.adminName,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Row(
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _statusColor(widget.status),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _statusLabel(widget.status),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: _statusColor(widget.status),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              child: Text(
+                _resolvedName,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
               ),
             ),
           ],
@@ -652,10 +549,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
           child: Container(height: 1, color: const Color(0xFFF0F0F0)),
         ),
       ),
-
       body: Column(
         children: [
-          // ── Ticket title bar ──
+          // Ticket title bar
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -680,27 +576,43 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             ),
           ),
 
-          // ── Messages ──
+          // Messages
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                final prevMsg = index > 0 ? _messages[index - 1] : null;
-                final showTime = prevMsg == null || prevMsg.isMe != msg.isMe;
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _messages.isEmpty
+                ? Center(
+                    child: Text(
+                      'ยังไม่มีข้อความ เริ่มพิมพ์ได้เลย',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = _messages[index];
+                      final isMe = msg.senderId == myId;
+                      final prevMsg = index > 0 ? _messages[index - 1] : null;
+                      final showSender =
+                          prevMsg == null || (prevMsg.senderId == myId) != isMe;
 
-                return _MessageBubble(
-                  message: msg,
-                  showTime: showTime,
-                  adminName: widget.adminName,
-                );
-              },
-            ),
+                      return _MessageBubble(
+                        message: msg,
+                        isMe: isMe,
+                        showSender: showSender,
+                        adminName: _resolvedName,
+                        timeStr: _formatTime(msg.createdAt),
+                      );
+                    },
+                  ),
           ),
 
-          // ── Input Area ──
+          // Input Area
           Container(
             padding: EdgeInsets.only(
               left: 12,
@@ -717,7 +629,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
               children: [
                 // Attach image
                 GestureDetector(
-                  onTap: () {},
+                  onTap: _pickAndSendImage,
                   child: Container(
                     width: 40,
                     height: 40,
@@ -803,180 +715,228 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 }
 
 // ── Message Bubble ──
-class _MessageBubble extends StatefulWidget {
-  final _ChatMessage message;
-  final bool showTime;
+class _MessageBubble extends StatelessWidget {
+  final ChatMessage message;
+  final bool isMe;
+  final bool showSender;
   final String adminName;
+  final String timeStr;
 
   const _MessageBubble({
     required this.message,
-    required this.showTime,
+    required this.isMe,
+    required this.showSender,
     required this.adminName,
+    required this.timeStr,
   });
 
   @override
-  State<_MessageBubble> createState() => _MessageBubbleState();
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: showSender ? 12 : 4,
+        left: isMe ? 48 : 0,
+        right: isMe ? 0 : 48,
+      ),
+      child: Column(
+        crossAxisAlignment: isMe
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          // Sender label
+          if (showSender && !isMe)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
+              child: Text(
+                adminName,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade500,
+                ),
+              ),
+            ),
+
+          // Image bubble
+          if (message.imageId != null)
+            Container(
+              decoration: BoxDecoration(
+                color: isMe ? AppTheme.primary : Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(
+                    message.content.isNotEmpty ? 4 : (isMe ? 18 : 4),
+                  ),
+                  bottomRight: Radius.circular(
+                    message.content.isNotEmpty ? 4 : (isMe ? 4 : 18),
+                  ),
+                ),
+                boxShadow: isMe
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+              ),
+              padding: const EdgeInsets.all(3),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: _ChatImageWidget(imageId: message.imageId!),
+              ),
+            ),
+
+          // Text bubble
+          if (message.content.isNotEmpty)
+            Container(
+              margin: message.imageId != null
+                  ? const EdgeInsets.only(top: 2)
+                  : EdgeInsets.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isMe ? AppTheme.primary : Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(isMe ? 18 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 18),
+                ),
+                boxShadow: isMe
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+              ),
+              child: Text(
+                message.content,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isMe ? Colors.white : AppTheme.textPrimary,
+                  height: 1.4,
+                ),
+              ),
+            ),
+
+          // Time + read status
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  timeStr,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                ),
+                if (isMe) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    message.readAt != null
+                        ? Icons.done_all_rounded
+                        : Icons.done_rounded,
+                    size: 14,
+                    color: message.readAt != null
+                        ? AppTheme.primary
+                        : Colors.grey.shade400,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _MessageBubbleState extends State<_MessageBubble>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _slideController;
-  late Animation<Offset> _slideAnimation;
-  late Animation<double> _fadeAnimation;
+// ── Chat Image Widget — fetches presigned URL then displays ──
+class _ChatImageWidget extends StatefulWidget {
+  final String imageId;
+  const _ChatImageWidget({required this.imageId});
+
+  @override
+  State<_ChatImageWidget> createState() => _ChatImageWidgetState();
+}
+
+class _ChatImageWidgetState extends State<_ChatImageWidget> {
+  String? _imageUrl;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
-    _slideAnimation =
-        Tween<Offset>(
-          begin: Offset(widget.message.isMe ? 0.3 : -0.3, 0),
-          end: Offset.zero,
-        ).animate(
-          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
-        );
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
-    _slideController.forward();
+    _fetchUrl();
   }
 
-  @override
-  void dispose() {
-    _slideController.dispose();
-    super.dispose();
+  Future<void> _fetchUrl() async {
+    try {
+      final auth = context.read<AuthService>();
+      final resp = await http.get(
+        Uri.parse('${ApiConfig.imageUrl}/api/images/${widget.imageId}/url'),
+        headers: auth.authHeaders,
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        if (mounted) setState(() => _imageUrl = data['url']);
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final msg = widget.message;
-    final isMe = msg.isMe;
+    if (_loading) {
+      return Container(
+        width: 220,
+        height: 165,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
 
-    return SlideTransition(
-      position: _slideAnimation,
-      child: FadeTransition(
-        opacity: _fadeAnimation,
-        child: Padding(
-          padding: EdgeInsets.only(
-            bottom: widget.showTime ? 12 : 4,
-            left: isMe ? 48 : 0,
-            right: isMe ? 0 : 48,
+    if (_imageUrl == null) {
+      return Container(
+        width: 220,
+        height: 165,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Icon(
+          Icons.broken_image_rounded,
+          size: 40,
+          color: Color(0xFFD1D5DB),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Image.network(
+        _imageUrl!,
+        width: 220,
+        height: 165,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          width: 220,
+          height: 165,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(16),
           ),
-          child: Column(
-            crossAxisAlignment: isMe
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              // Sender label
-              if (widget.showTime && !isMe)
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 4),
-                  child: Text(
-                    widget.adminName,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                ),
-
-              // Image bubble
-              if (msg.imageUrl != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.network(
-                    msg.imageUrl!,
-                    width: 220,
-                    height: 165,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 220,
-                      height: 165,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(
-                        Icons.broken_image_rounded,
-                        size: 40,
-                        color: Color(0xFFD1D5DB),
-                      ),
-                    ),
-                  ),
-                ),
-
-              // Text bubble
-              if (msg.text.isNotEmpty)
-                Container(
-                  margin: msg.imageUrl != null
-                      ? const EdgeInsets.only(top: 4)
-                      : EdgeInsets.zero,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isMe ? AppTheme.primary : Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18),
-                      topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(isMe ? 18 : 4),
-                      bottomRight: Radius.circular(isMe ? 4 : 18),
-                    ),
-                    boxShadow: isMe
-                        ? null
-                        : [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                  ),
-                  child: Text(
-                    msg.text,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: isMe ? Colors.white : AppTheme.textPrimary,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-
-              // Time + read status
-              Padding(
-                padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      msg.time,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade400,
-                      ),
-                    ),
-                    if (isMe) ...[
-                      const SizedBox(width: 4),
-                      Icon(
-                        msg.isRead
-                            ? Icons.done_all_rounded
-                            : Icons.done_rounded,
-                        size: 14,
-                        color: msg.isRead
-                            ? AppTheme.primary
-                            : Colors.grey.shade400,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+          child: const Icon(
+            Icons.broken_image_rounded,
+            size: 40,
+            color: Color(0xFFD1D5DB),
           ),
         ),
       ),

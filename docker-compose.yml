@@ -1,0 +1,215 @@
+services:
+  # ───────────────────────── Infrastructure ─────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: socialdev-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./server/postgres-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: socialdev-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  # Single-node Redpanda — Kafka API compatible, no Zookeeper.
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: socialdev-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092,OUTSIDE://localhost:19092
+    ports:
+      - "19092:19092"
+      - "9644:9644"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redpanda-console:
+    image: redpandadata/console:latest
+    container_name: socialdev-redpanda-console
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8088:8080"
+    depends_on:
+      - redpanda
+
+  # ───────────────────────── Application services ─────────────────────────
+  auth:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args: { SERVICE: login }
+    container_name: socialdev-auth
+    environment:
+      PORT: "8080"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: socialdev_auth
+      JWT_SECRET: dev-secret-change-me
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      postgres: { condition: service_healthy }
+      redpanda: { condition: service_started }
+    ports:
+      - "8080:8080"
+
+  problem:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args: { SERVICE: problem }
+    container_name: socialdev-problem
+    environment:
+      PORT: "8083"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: socialdev_problem
+      JWT_SECRET: dev-secret-change-me
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      postgres: { condition: service_healthy }
+      redpanda: { condition: service_started }
+    ports:
+      - "8083:8083"
+
+  activity:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args: { SERVICE: activity }
+    container_name: socialdev-activity
+    environment:
+      PORT: "8084"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: socialdev_activity
+      JWT_SECRET: dev-secret-change-me
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      postgres: { condition: service_healthy }
+      redpanda: { condition: service_started }
+    ports:
+      - "8084:8084"
+
+  chat:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args: { SERVICE: chat }
+    container_name: socialdev-chat
+    environment:
+      PORT: "8085"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: socialdev_chat
+      JWT_SECRET: dev-secret-change-me
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      postgres: { condition: service_healthy }
+      redpanda: { condition: service_started }
+    ports:
+      - "8085:8085"
+
+  image:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args: { SERVICE: image }
+    container_name: socialdev-image
+    environment:
+      PORT: "8081"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: socialdev_image
+      JWT_SECRET: dev-secret-change-me
+      KAFKA_BROKERS: redpanda:9092
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: socialdev
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+      redpanda: { condition: service_started }
+    ports:
+      - "8081:8081"
+
+  notification:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args: { SERVICE: notification }
+    container_name: socialdev-notification
+    environment:
+      PORT: "8086"
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      redpanda: { condition: service_started }
+    ports:
+      - "8086:8086"
+
+  analytics:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args: { SERVICE: analytics }
+    container_name: socialdev-analytics
+    environment:
+      PORT: "8087"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: socialdev_analytics
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      postgres: { condition: service_healthy }
+      redpanda: { condition: service_started }
+    ports:
+      - "8087:8087"
+
+volumes:
+  pgdata:
+  miniodata:

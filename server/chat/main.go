@@ -7,6 +7,8 @@ import (
 	"chat-service/config"
 	"chat-service/routes"
 
+	"socialdev/shared/events"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/joho/godotenv"
 )
@@ -18,9 +20,16 @@ func main() {
 
 	config.ConnectDatabase()
 
+	events.Init("chat-service")
+	defer events.Close()
+
 	app := fiber.New(fiber.Config{AppName: "Chat Service"})
 
 	app.Use(func(c fiber.Ctx) error {
+		// Skip CORS headers for WebSocket upgrade
+		if c.Path() == "/ws" {
+			return c.Next()
+		}
 		c.Set("Access-Control-Allow-Origin", "*")
 		c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
 		c.Set("Access-Control-Allow-Headers", "Content-Type,Authorization")

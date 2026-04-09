@@ -4,6 +4,8 @@ import (
 	"chat-service/config"
 	"chat-service/models"
 
+	"socialdev/shared/events"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
@@ -28,7 +30,11 @@ func findOrCreateRoom(userA, userB string) (*models.Room, error) {
 	if err := config.DB.Create(&room).Error; err != nil {
 		return nil, err
 	}
-	// TODO: publish chat.room.created
+	events.Publish(events.TopicChatRoomCreated, map[string]interface{}{
+		"room_id": room.ID,
+		"user_a":  room.UserA,
+		"user_b":  room.UserB,
+	})
 	return &room, nil
 }
 
@@ -48,6 +54,7 @@ func SendMessage(c fiber.Ctx) error {
 	var body struct {
 		ToUserID string `json:"to_user_id"`
 		Content  string `json:"content"`
+		ImageID  string `json:"image_id"`
 	}
 	if err := c.Bind().JSON(&body); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
@@ -63,12 +70,28 @@ func SendMessage(c fiber.Ctx) error {
 		RoomID:   room.ID,
 		SenderID: uid,
 		Content:  body.Content,
+		ImageID:  body.ImageID,
 	}
 	if err := config.DB.Create(&msg).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	config.DB.Model(room).Update("updated_at", msg.CreatedAt)
-	// TODO: broadcast WebSocket + publish chat.message.sent
+	events.Publish(events.TopicChatMessageSent, map[string]interface{}{
+		"room_id":   room.ID,
+		"sender_id": uid,
+		"to_user":   body.ToUserID,
+		"content":   body.Content,
+	})
+
+	// Broadcast via WebSocket to both users in the room
+	out := WsOutgoingMessage{
+		Type:    "new_message",
+		Message: msg,
+		RoomID:  room.ID.String(),
+	}
+	WsHub.SendToUser(room.UserA, out)
+	WsHub.SendToUser(room.UserB, out)
+
 	return c.Status(201).JSON(fiber.Map{"room": room, "message": msg})
 }
 

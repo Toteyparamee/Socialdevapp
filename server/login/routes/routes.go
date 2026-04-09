@@ -19,6 +19,9 @@ func Setup(app *fiber.App) {
 	auth.Post("/login", handlers.Login)
 	auth.Post("/google", handlers.GoogleLogin)
 
+	// ── Public user lookup (ชื่อ + avatar เท่านั้น) ──
+	app.Post("/users/lookup", handlers.LookupUsers)
+
 	// ── User routes (protected) ──
 	user := app.Group("/user", middleware.JWTAuth)
 	user.Get("/profile", handlers.GetProfile)

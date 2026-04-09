@@ -1,75 +1,35 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:math' as math;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../models/activity.dart';
+import '../../services/activity_service.dart';
 
-class SchoolActivitiesScreen extends StatelessWidget {
+class SchoolActivitiesScreen extends StatefulWidget {
   const SchoolActivitiesScreen({super.key});
 
+  @override
+  State<SchoolActivitiesScreen> createState() => _SchoolActivitiesScreenState();
+}
+
+class _SchoolActivitiesScreenState extends State<SchoolActivitiesScreen> {
   static const String _schoolName = 'โรงเรียนสาธิตมหาวิทยาลัย';
 
-  static final List<_ActivityData> _activities = [
-    _ActivityData(
-      title: 'กิจกรรมจิตอาสาพัฒนาชุมชน',
-      date: '15 เม.ย. 2569',
-      location: 'หอประชุมโรงเรียน',
-      image: 'https://picsum.photos/seed/act1/400/200',
-      description:
-          'กิจกรรมจิตอาสาพัฒนาชุมชนรอบโรงเรียน เปิดรับนักเรียนทุกระดับชั้น '
-          'ร่วมทำความสะอาดและปลูกต้นไม้ในพื้นที่สาธารณะ',
-      category: 'จิตอาสา',
-      categoryColor: Color(0xFF10B981),
-      lat: 13.7563,
-      lng: 100.5018,
-      teacher: 'นายสมชาย ใจดี',
-    ),
-    _ActivityData(
-      title: 'แข่งขันกีฬาสีประจำปี',
-      date: '20-22 เม.ย. 2569',
-      location: 'สนามกีฬาโรงเรียน',
-      image: 'https://picsum.photos/seed/act2/400/200',
-      description:
-          'การแข่งขันกีฬาสีประจำปีการศึกษา 2569 มีกีฬาหลากหลายประเภท '
-          'ทั้งฟุตบอล บาสเกตบอล วอลเลย์บอล และกรีฑา',
-      category: 'กีฬา',
-      categoryColor: Color(0xFFF59E0B),
-      lat: 13.7570,
-      lng: 100.5025,
-      teacher: 'นายสมชาย ใจดี',
-    ),
-    _ActivityData(
-      title: 'นิทรรศการวิทยาศาสตร์',
-      date: '1 พ.ค. 2569',
-      location: 'อาคาร A ชั้น 3',
-      image: 'https://picsum.photos/seed/act3/400/200',
-      description:
-          'นิทรรศการแสดงผลงานวิทยาศาสตร์ของนักเรียน ระดับชั้น ม.1 - ม.6 '
-          'พร้อมการทดลองสดและบูธกิจกรรม',
-      category: 'วิชาการ',
-      categoryColor: Color(0xFF3B82F6),
-      lat: 13.7555,
-      lng: 100.5010,
-      teacher: 'นายสมชาย ใจดี',
-    ),
-    _ActivityData(
-      title: 'ค่ายภาษาอังกฤษ English Camp',
-      date: '10-12 พ.ค. 2569',
-      location: 'ห้องประชุมอาคาร C',
-      image: 'https://picsum.photos/seed/act4/400/200',
-      description:
-          'ค่ายภาษาอังกฤษ 3 วัน 2 คืน เรียนรู้ผ่านกิจกรรมสนุกสนาน '
-          'ฝึกทักษะการฟัง พูด อ่าน เขียน กับครูเจ้าของภาษา',
-      category: 'ภาษา',
-      categoryColor: Color(0xFF8B5CF6),
-      lat: 13.7580,
-      lng: 100.5030,
-      teacher: 'นายสมชาย ใจดี',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ActivityService>().fetchActivities();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final activityService = context.watch<ActivityService>();
+    final activities = activityService.activities;
+
     return Scaffold(
       backgroundColor: AppTheme.inputBg,
       appBar: AppBar(
@@ -83,91 +43,127 @@ class SchoolActivitiesScreen extends StatelessWidget {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // School name header
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: AppTheme.backgroundGradient,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: AppTheme.softShadow,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.school_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
+      body: activityService.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : activityService.error != null
+              ? Center(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
-                        _schoolName,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'กิจกรรมทั้งหมด ${_activities.length} รายการ',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 13,
-                        ),
+                      Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey.shade400),
+                      const SizedBox(height: 12),
+                      Text(activityService.error!, style: TextStyle(color: Colors.grey.shade500)),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: () => activityService.fetchActivities(),
+                        child: const Text('ลองใหม่'),
                       ),
                     ],
                   ),
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    // School name header
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.backgroundGradient,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: AppTheme.softShadow,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.school_rounded,
+                              color: Colors.white,
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  _schoolName,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'กิจกรรมทั้งหมด ${activities.length} รายการ',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    const Text(
+                      'กิจกรรมที่กำลังจะมาถึง',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    if (activities.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(Icons.event_busy_rounded, size: 56, color: Colors.grey.shade400),
+                              const SizedBox(height: 12),
+                              const Text('ยังไม่มีกิจกรรม', style: TextStyle(color: AppTheme.textSecondary)),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      ...List.generate(activities.length, (index) {
+                        final activity = activities[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _ActivityCard(activity: activity),
+                        );
+                      }),
+                  ],
                 ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Section title
-          const Text(
-            'กิจกรรมที่กำลังจะมาถึง',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Activity list
-          ...List.generate(_activities.length, (index) {
-            final activity = _activities[index];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _ActivityCard(activity: activity),
-            );
-          }),
-        ],
-      ),
     );
   }
 }
 
+String _formatThaiDate(DateTime dt) {
+  const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  return '${dt.day} ${months[dt.month - 1]} ${dt.year + 543}';
+}
+
 // ── Activity Card ──
 class _ActivityCard extends StatelessWidget {
-  final _ActivityData activity;
+  final Activity activity;
   const _ActivityCard({required this.activity});
 
   @override
@@ -196,27 +192,16 @@ class _ActivityCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
+            // Placeholder image
+            Container(
+              height: 140,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.08),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               ),
-              child: Image.network(
-                activity.image,
-                height: 140,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 140,
-                  color: AppTheme.inputBg,
-                  child: const Center(
-                    child: Icon(
-                      Icons.image_outlined,
-                      size: 40,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ),
+              child: Center(
+                child: Icon(Icons.event_rounded, size: 48, color: AppTheme.primary.withValues(alpha: 0.4)),
               ),
             ),
             Padding(
@@ -224,27 +209,23 @@ class _ActivityCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Category chip
+                  // Max slots chip
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: activity.categoryColor.withValues(alpha: 0.1),
+                      color: AppTheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      activity.category,
+                      'รับ ${activity.maxSlots} คน',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: activity.categoryColor,
+                        color: AppTheme.primary,
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  // Title
                   Text(
                     activity.title,
                     style: const TextStyle(
@@ -254,61 +235,25 @@ class _ActivityCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  // Info rows
                   Row(
                     children: [
-                      Icon(
-                        Icons.calendar_today_rounded,
-                        size: 13,
-                        color: AppTheme.textSecondary,
-                      ),
+                      const Icon(Icons.calendar_today_rounded, size: 13, color: AppTheme.textSecondary),
                       const SizedBox(width: 4),
                       Text(
-                        activity.date,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
+                        _formatThaiDate(activity.startAt),
+                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Icon(
-                        Icons.location_on_outlined,
-                        size: 13,
-                        color: AppTheme.textSecondary,
-                      ),
+                      const Icon(Icons.location_on_outlined, size: 13, color: AppTheme.textSecondary),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           activity.location,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.person_outline_rounded,
-                        size: 13,
-                        color: AppTheme.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          activity.teacher,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                          ),
+                          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -326,7 +271,7 @@ class _ActivityCard extends StatelessWidget {
 
 // ── Activity Detail Screen ──
 class _ActivityDetailScreen extends StatefulWidget {
-  final _ActivityData activity;
+  final Activity activity;
   const _ActivityDetailScreen({required this.activity});
 
   @override
@@ -337,7 +282,7 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
   GoogleMapController? _mapController;
   double _currentZoom = 16;
 
-  _ActivityData get activity => widget.activity;
+  Activity get activity => widget.activity;
 
   void _zoomIn() {
     _currentZoom = (_currentZoom + 1).clamp(1, 20);
@@ -373,18 +318,10 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
               ),
             ),
             flexibleSpace: FlexibleSpaceBar(
-              background: Image.network(
-                activity.image,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: AppTheme.inputBg,
-                  child: const Center(
-                    child: Icon(
-                      Icons.image_outlined,
-                      size: 48,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
+              background: Container(
+                color: AppTheme.primary.withValues(alpha: 0.15),
+                child: Center(
+                  child: Icon(Icons.event_rounded, size: 64, color: AppTheme.primary.withValues(alpha: 0.4)),
                 ),
               ),
             ),
@@ -397,28 +334,24 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Category chip
+                  // Slots chip
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: activity.categoryColor.withValues(alpha: 0.1),
+                      color: AppTheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      activity.category,
+                      'รับ ${activity.maxSlots} คน',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: activity.categoryColor,
+                        color: AppTheme.primary,
                       ),
                     ),
                   ),
                   const SizedBox(height: 14),
 
-                  // Title
                   Text(
                     activity.title,
                     style: const TextStyle(
@@ -429,11 +362,10 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Info rows
                   _buildInfoRow(
                     Icons.calendar_today_rounded,
                     'วันที่',
-                    activity.date,
+                    _formatThaiDate(activity.startAt),
                   ),
                   const SizedBox(height: 12),
                   _buildInfoRow(
@@ -442,9 +374,9 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
                     activity.location,
                   ),
                   _buildInfoRow(
-                    Icons.person_outline_rounded,
-                    'ครูผู้ดูแล',
-                    activity.teacher,
+                    Icons.people_outline_rounded,
+                    'จำนวนรับ',
+                    '${activity.maxSlots} คน',
                   ),
                   const SizedBox(height: 24),
 
@@ -490,7 +422,7 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
                         children: [
                           GoogleMap(
                             initialCameraPosition: CameraPosition(
-                              target: LatLng(activity.lat, activity.lng),
+                              target: const LatLng(13.7563, 100.5018),
                               zoom: 16,
                             ),
                             onMapCreated: (controller) =>
@@ -498,7 +430,7 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
                             markers: {
                               Marker(
                                 markerId: const MarkerId('activity_location'),
-                                position: LatLng(activity.lat, activity.lng),
+                                position: const LatLng(13.7563, 100.5018),
                                 infoWindow: InfoWindow(
                                   title: activity.title,
                                   snippet: activity.location,
@@ -570,6 +502,7 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => _ActivityRegisterScreen(
+                                activityId: activity.id,
                                 activityTitle: activity.title,
                               ),
                             ),
@@ -666,8 +599,9 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
 enum _ContactChannel { line, facebook, instagram }
 
 class _ActivityRegisterScreen extends StatefulWidget {
+  final String activityId;
   final String activityTitle;
-  const _ActivityRegisterScreen({required this.activityTitle});
+  const _ActivityRegisterScreen({required this.activityId, required this.activityTitle});
 
   @override
   State<_ActivityRegisterScreen> createState() =>
@@ -758,14 +692,30 @@ class _ActivityRegisterScreenState extends State<_ActivityRegisterScreen>
     }
 
     setState(() => _isSending = true);
-    await _airplaneController.forward();
-    setState(() {
-      _isSending = false;
-      _sendComplete = true;
-    });
 
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (mounted) Navigator.of(context).pop();
+    // เรียก API ลงทะเบียน
+    final success = await context.read<ActivityService>().registerForActivity(widget.activityId);
+
+    if (!mounted) return;
+
+    if (success) {
+      await _airplaneController.forward();
+      setState(() {
+        _isSending = false;
+        _sendComplete = true;
+      });
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (mounted) Navigator.of(context).pop();
+    } else {
+      setState(() => _isSending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ลงทะเบียนไม่สำเร็จ ลองใหม่อีกครั้ง'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -1349,28 +1299,3 @@ class _ActivityRegisterScreenState extends State<_ActivityRegisterScreen>
 }
 
 // ── Data model ──
-class _ActivityData {
-  final String title;
-  final String date;
-  final String location;
-  final String image;
-  final String description;
-  final String category;
-  final Color categoryColor;
-  final double lat;
-  final double lng;
-  final String teacher;
-
-  const _ActivityData({
-    required this.title,
-    required this.date,
-    required this.location,
-    required this.image,
-    required this.description,
-    required this.category,
-    required this.categoryColor,
-    required this.lat,
-    required this.lng,
-    required this.teacher,
-  });
-}

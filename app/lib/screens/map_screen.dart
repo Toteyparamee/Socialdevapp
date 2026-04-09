@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../models/problem_report.dart';
+import '../services/problem_service.dart';
 import '../widgets/problem_bottom_sheet.dart';
 import '../widgets/filter_panel.dart';
 
@@ -45,7 +47,12 @@ class _MapHomeScreenState extends State<MapHomeScreen>
       curve: Curves.easeOutCubic,
     );
     _goToMyLocation();
-    _buildCustomMarkers();
+    // โหลดข้อมูลจาก API
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ProblemService>().fetchProblems().then((_) {
+        _buildCustomMarkers();
+      });
+    });
   }
 
   Future<void> _goToMyLocation() async {
@@ -76,8 +83,10 @@ class _MapHomeScreenState extends State<MapHomeScreen>
     super.dispose();
   }
 
-  List<ProblemReport> get _filteredProblems =>
-      sampleProblems.where((p) => _activeFilters.contains(p.category)).toList();
+  List<ProblemReport> get _filteredProblems {
+    final problems = context.read<ProblemService>().problems;
+    return problems.where((p) => _activeFilters.contains(p.category)).toList();
+  }
 
   Set<Marker> get _markers {
     return _filteredProblems.map((p) {
@@ -365,6 +374,9 @@ class _MapHomeScreenState extends State<MapHomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    // watch เพื่อ rebuild เมื่อข้อมูลเปลี่ยน
+    context.watch<ProblemService>();
+
     return Scaffold(
       body: Stack(
         children: [

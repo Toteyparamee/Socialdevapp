@@ -12,8 +12,12 @@ type Activity struct {
 	Title       string    `gorm:"not null" json:"title"`
 	Description string    `json:"description"`
 	Location    string    `json:"location"`
+	Latitude    *float64  `json:"latitude"`
+	Longitude   *float64  `json:"longitude"`
 	StartAt     time.Time `json:"start_at"`
 	EndAt       time.Time `json:"end_at"`
+	Supervisor  string    `json:"supervisor"`
+	SupervisorPhone string `json:"supervisor_phone"`
 	MaxSlots    int       `json:"max_slots"`
 	ImageIDs    []string  `gorm:"type:text[]" json:"image_ids"`
 	CreatedAt   time.Time `json:"created_at"`

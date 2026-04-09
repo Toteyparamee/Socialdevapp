@@ -12,11 +12,14 @@ func Setup(app *fiber.App) {
 
 	api := app.Group("/api/activities")
 	api.Get("/", handlers.ListActivities)
-	api.Get("/:id", handlers.GetActivity)
 
 	api.Use(middleware.JWTProtect)
+	api.Get("/my-registrations", handlers.MyRegistrations)
+	api.Get("/my-submissions", handlers.MyActivitySubmissions)
+	api.Get("/:id", handlers.GetActivity)
 	api.Post("/", handlers.CreateActivity)
 	api.Post("/:id/register", handlers.Register)
+	api.Delete("/registrations/:regId", handlers.Unregister)
 	api.Post("/registrations/:regId/submit", handlers.Submit)
 	api.Put("/submissions/:subId/review", handlers.Review)
 }

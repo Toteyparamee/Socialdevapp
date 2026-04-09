@@ -7,6 +7,8 @@ import (
 	"activity-service/config"
 	"activity-service/routes"
 
+	"socialdev/shared/events"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/joho/godotenv"
 )
@@ -17,6 +19,9 @@ func main() {
 	}
 
 	config.ConnectDatabase()
+
+	events.Init("activity-service")
+	defer events.Close()
 
 	app := fiber.New(fiber.Config{AppName: "Activity Service"})
 

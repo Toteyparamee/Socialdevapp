@@ -1,104 +1,73 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../models/activity.dart';
+import '../../services/activity_service.dart';
 import 'chat_screen.dart';
-
-// ── ข้อมูลการลงทะเบียน ──
-class _RegistrationData {
-  final String title;
-  final String organization;
-  final String date;
-  final DateTime eventDate;
-  final String supervisor;
-  final String phone;
-  final String contactChannel;
-  final String contactId;
-  final String status;
-  final Color statusColor;
-  final double lat;
-  final double lng;
-  final String description;
-
-  const _RegistrationData({
-    required this.title,
-    required this.organization,
-    required this.date,
-    required this.eventDate,
-    required this.supervisor,
-    required this.phone,
-    required this.contactChannel,
-    required this.contactId,
-    required this.status,
-    required this.statusColor,
-    required this.lat,
-    required this.lng,
-    required this.description,
-  });
-}
 
 // ══════════════════════════════════════════════
 // หน้า List รายการที่ลงทะเบียน
 // ══════════════════════════════════════════════
-class MyRegistrationsScreen extends StatelessWidget {
+class MyRegistrationsScreen extends StatefulWidget {
   const MyRegistrationsScreen({super.key});
 
-  static final List<_RegistrationData> _registrations = [
-    _RegistrationData(
-      title: 'กิจกรรมจิตอาสาพัฒนาชุมชน',
-      organization: 'สำนักงานเขตพื้นที่การศึกษา',
-      date: '15 เม.ย. 2569',
-      eventDate: DateTime(2026, 4, 15),
-      supervisor: 'อ.สมชาย ใจดี',
-      phone: '081-234-5678',
-      contactChannel: 'Line',
-      contactId: '@somchai_j',
-      status: 'รอดำเนินการ',
-      statusColor: Color(0xFFFBBF24),
-      lat: 13.7563,
-      lng: 100.5018,
-      description:
-          'กิจกรรมจิตอาสาพัฒนาชุมชนรอบโรงเรียน เปิดรับนักเรียนทุกระดับชั้น '
-          'ร่วมทำความสะอาดและปลูกต้นไม้ในพื้นที่สาธารณะ',
-    ),
-    _RegistrationData(
-      title: 'แข่งขันกีฬาสีประจำปี',
-      organization: 'ฝ่ายกิจกรรมนักเรียน',
-      date: '20-22 เม.ย. 2569',
-      eventDate: DateTime(2026, 4, 20),
-      supervisor: 'อ.วิภา รักกีฬา',
-      phone: '089-876-5432',
-      contactChannel: 'Facebook',
-      contactId: 'Wipa Raksport',
-      status: 'อนุมัติแล้ว',
-      statusColor: Color(0xFF10B981),
-      lat: 13.7570,
-      lng: 100.5025,
-      description:
-          'การแข่งขันกีฬาสีประจำปีการศึกษา 2569 มีกีฬาหลากหลายประเภท '
-          'ทั้งฟุตบอล บาสเกตบอล วอลเลย์บอล และกรีฑา',
-    ),
-    _RegistrationData(
-      title: 'ค่ายภาษาอังกฤษ English Camp',
-      organization: 'กลุ่มสาระภาษาต่างประเทศ',
-      date: '10-12 พ.ค. 2569',
-      eventDate: DateTime(2026, 5, 10),
-      supervisor: 'อ.แนนซี่ สมิธ',
-      phone: '092-111-2233',
-      contactChannel: 'IG',
-      contactId: '@nancy_english',
-      status: 'รอส่งงาน',
-      statusColor: Color(0xFF3B82F6),
-      lat: 13.7580,
-      lng: 100.5030,
-      description:
-          'ค่ายภาษาอังกฤษ 3 วัน 2 คืน เรียนรู้ผ่านกิจกรรมสนุกสนาน '
-          'ฝึกทักษะการฟัง พูด อ่าน เขียน กับครูเจ้าของภาษา',
-    ),
-  ];
+  @override
+  State<MyRegistrationsScreen> createState() => _MyRegistrationsScreenState();
+}
+
+class _MyRegistrationsScreenState extends State<MyRegistrationsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<ActivityService>().fetchMyRegistrations();
+  }
+
+  String _statusLabel(String status) {
+    return switch (status) {
+      'registered' => 'ลงทะเบียนแล้ว',
+      'submitted' => 'ส่งงานแล้ว',
+      'passed' => 'ผ่าน',
+      'failed' => 'ไม่ผ่าน',
+      _ => status,
+    };
+  }
+
+  Color _statusColor(String status) {
+    return switch (status) {
+      'registered' => const Color(0xFFFBBF24),
+      'submitted' => const Color(0xFF3B82F6),
+      'passed' => const Color(0xFF10B981),
+      'failed' => const Color(0xFFEF4444),
+      _ => Colors.grey,
+    };
+  }
+
+  String _formatDate(DateTime dt) {
+    const months = [
+      '',
+      'ม.ค.',
+      'ก.พ.',
+      'มี.ค.',
+      'เม.ย.',
+      'พ.ค.',
+      'มิ.ย.',
+      'ก.ค.',
+      'ส.ค.',
+      'ก.ย.',
+      'ต.ค.',
+      'พ.ย.',
+      'ธ.ค.',
+    ];
+    return '${dt.day} ${months[dt.month]} ${dt.year + 543}';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final service = context.watch<ActivityService>();
+    final registrations = service.myRegistrations;
+
     return Scaffold(
       backgroundColor: AppTheme.inputBg,
       appBar: AppBar(
@@ -112,51 +81,85 @@ class MyRegistrationsScreen extends StatelessWidget {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
-      body: _registrations.isEmpty
+      body: service.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : registrations.isEmpty
           ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.assignment_outlined,
-                      size: 64, color: Colors.grey.shade300),
+                  Icon(
+                    Icons.assignment_outlined,
+                    size: 64,
+                    color: Colors.grey.shade300,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'ยังไม่มีรายการลงทะเบียน',
-                    style: TextStyle(
-                        fontSize: 16, color: Colors.grey.shade500),
+                    style: TextStyle(fontSize: 16, color: Colors.grey.shade500),
                   ),
                 ],
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _registrations.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _RegistrationCard(
-                      registration: _registrations[index]),
-                );
-              },
+          : RefreshIndicator(
+              onRefresh: () => service.fetchMyRegistrations(),
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: registrations.length,
+                itemBuilder: (context, index) {
+                  final reg = registrations[index];
+                  final activity = reg.activity;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _RegistrationCard(
+                      registration: reg,
+                      activity: activity,
+                      statusLabel: _statusLabel(reg.status),
+                      statusColor: _statusColor(reg.status),
+                      dateLabel: activity != null
+                          ? _formatDate(activity.startAt)
+                          : '',
+                    ),
+                  );
+                },
+              ),
             ),
     );
   }
-
 }
 
 // ── Card แต่ละรายการ ──
 class _RegistrationCard extends StatelessWidget {
-  final _RegistrationData registration;
-  const _RegistrationCard({required this.registration});
+  final Registration registration;
+  final Activity? activity;
+  final String statusLabel;
+  final Color statusColor;
+  final String dateLabel;
+
+  const _RegistrationCard({
+    required this.registration,
+    required this.activity,
+    required this.statusLabel,
+    required this.statusColor,
+    required this.dateLabel,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final title = activity?.title ?? 'กิจกรรม';
+    final location = activity?.location ?? '';
+
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              _RegistrationDetailScreen(registration: registration),
+          builder: (_) => _RegistrationDetailScreen(
+            registration: registration,
+            activity: activity,
+            statusLabel: statusLabel,
+            statusColor: statusColor,
+            dateLabel: dateLabel,
+          ),
         ),
       ),
       child: Container(
@@ -175,12 +178,11 @@ class _RegistrationCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Status + Title
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    registration.title,
+                    title,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -190,65 +192,65 @@ class _RegistrationCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: registration.statusColor.withValues(alpha: 0.12),
+                    color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    registration.status,
+                    statusLabel,
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: registration.statusColor,
+                      color: statusColor,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            // Organization
-            Row(
-              children: [
-                const Icon(Icons.business_rounded,
-                    size: 14, color: AppTheme.textSecondary),
-                const SizedBox(width: 6),
-                Text(
-                  registration.organization,
-                  style: const TextStyle(
-                      fontSize: 13, color: AppTheme.textSecondary),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            // Date
-            Row(
-              children: [
-                const Icon(Icons.calendar_today_rounded,
-                    size: 14, color: AppTheme.textSecondary),
-                const SizedBox(width: 6),
-                Text(
-                  registration.date,
-                  style: const TextStyle(
-                      fontSize: 13, color: AppTheme.textSecondary),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            // Supervisor
-            Row(
-              children: [
-                const Icon(Icons.person_outline_rounded,
-                    size: 14, color: AppTheme.textSecondary),
-                const SizedBox(width: 6),
-                Text(
-                  registration.supervisor,
-                  style: const TextStyle(
-                      fontSize: 13, color: AppTheme.textSecondary),
-                ),
-              ],
-            ),
+            if (location.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.location_on_rounded,
+                    size: 14,
+                    color: AppTheme.textSecondary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    location,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (dateLabel.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today_rounded,
+                    size: 14,
+                    color: AppTheme.textSecondary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    dateLabel,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -260,8 +262,19 @@ class _RegistrationCard extends StatelessWidget {
 // หน้ารายละเอียดการลงทะเบียน
 // ══════════════════════════════════════════════
 class _RegistrationDetailScreen extends StatefulWidget {
-  final _RegistrationData registration;
-  const _RegistrationDetailScreen({required this.registration});
+  final Registration registration;
+  final Activity? activity;
+  final String statusLabel;
+  final Color statusColor;
+  final String dateLabel;
+
+  const _RegistrationDetailScreen({
+    required this.registration,
+    required this.activity,
+    required this.statusLabel,
+    required this.statusColor,
+    required this.dateLabel,
+  });
 
   @override
   State<_RegistrationDetailScreen> createState() =>
@@ -273,7 +286,8 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
   double _currentZoom = 16;
   final List<PlatformFile> _attachedFiles = [];
 
-  _RegistrationData get reg => widget.registration;
+  Registration get reg => widget.registration;
+  Activity? get activity => widget.activity;
 
   void _zoomIn() {
     _currentZoom = (_currentZoom + 1).clamp(1, 20);
@@ -339,23 +353,38 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
       return;
     }
 
+    final title = activity?.title ?? 'กิจกรรม';
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('ยืนยันส่งงาน',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text(
+          'ยืนยันส่งงาน',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
         content: Text(
-            'ส่งไฟล์ทั้งหมด ${_attachedFiles.length} ไฟล์\nสำหรับกิจกรรม "${reg.title}"'),
+          'ส่งไฟล์ทั้งหมด ${_attachedFiles.length} ไฟล์\nสำหรับกิจกรรม "$title"',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('ยกเลิก',
-                style: TextStyle(color: Colors.grey.shade500)),
+            child: Text(
+              'ยกเลิก',
+              style: TextStyle(color: Colors.grey.shade500),
+            ),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
+
+              final fileNames = _attachedFiles.map((f) => f.name).join(', ');
+              await context.read<ActivityService>().submitWork(
+                reg.id,
+                content: 'ส่งไฟล์: $fileNames',
+              );
+
+              if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('ส่งงานสำเร็จ!'),
@@ -368,7 +397,8 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primary,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('ส่งงาน'),
           ),
@@ -377,13 +407,79 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
     );
   }
 
+  void _handleUnregister() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'ถอนการลงทะเบียน',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'ต้องการถอนการลงทะเบียน "${activity?.title ?? 'กิจกรรม'}" หรือไม่?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'ยกเลิก',
+              style: TextStyle(color: Colors.grey.shade500),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final success = await context.read<ActivityService>().unregister(
+                reg.id,
+              );
+              if (!mounted) return;
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('ถอนการลงทะเบียนสำเร็จ'),
+                    backgroundColor: Color(0xFF10B981),
+                  ),
+                );
+                Navigator.pop(context);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('ถอนการลงทะเบียนไม่สำเร็จ'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('ยืนยัน'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final title = activity?.title ?? 'กิจกรรม';
+    final description = activity?.description ?? '';
+    final location = activity?.location ?? '';
+    final lat = activity?.latitude;
+    final lng = activity?.longitude;
+    final hasMap = lat != null && lng != null;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('รายละเอียด',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text(
+          'รายละเอียด',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,
@@ -391,16 +487,26 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
         surfaceTintColor: Colors.transparent,
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ChatRoomScreen(
-              ticketTitle: reg.title,
-              status: TicketStatus.open,
-              adminName: reg.supervisor,
+        onPressed: () {
+          final teacherId = activity?.teacherId;
+          if (teacherId == null || teacherId.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('ไม่พบข้อมูลผู้ดูแลกิจกรรม')),
+            );
+            return;
+          }
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ChatRoomScreen(
+                toUserId: teacherId,
+                ticketTitle: title,
+                status: TicketStatus.open,
+                adminName: title,
+              ),
             ),
-          ),
-        ),
+          );
+        },
         backgroundColor: AppTheme.primary,
         elevation: 4,
         child: const Icon(Icons.chat_rounded, color: Colors.white, size: 24),
@@ -416,7 +522,7 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    reg.title,
+                    title,
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -426,18 +532,20 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
                 ),
                 const SizedBox(width: 12),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: reg.statusColor.withValues(alpha: 0.12),
+                    color: widget.statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    reg.status,
+                    widget.statusLabel,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: reg.statusColor,
+                      color: widget.statusColor,
                     ),
                   ),
                 ),
@@ -446,80 +554,82 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
             const SizedBox(height: 20),
 
             // Description
-            Text(
-              reg.description,
-              style: const TextStyle(
-                fontSize: 14,
-                height: 1.7,
-                color: AppTheme.textSecondary,
+            if (description.isNotEmpty)
+              Text(
+                description,
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.7,
+                  color: AppTheme.textSecondary,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
+            if (description.isNotEmpty) const SizedBox(height: 24),
 
             // ── ข้อมูลรายละเอียด ──
             _buildSection('ข้อมูลกิจกรรม'),
             const SizedBox(height: 12),
-            _buildInfoTile(Icons.business_rounded, 'หน่วยงาน', reg.organization),
+            if (location.isNotEmpty)
+              _buildInfoTile(Icons.location_on_rounded, 'สถานที่', location),
+            if (widget.dateLabel.isNotEmpty)
+              _buildInfoTile(
+                Icons.calendar_today_rounded,
+                'วันที่',
+                widget.dateLabel,
+              ),
             _buildInfoTile(
-                Icons.calendar_today_rounded, 'วันที่', reg.date),
-            _buildInfoTile(
-                Icons.person_outline_rounded, 'ผู้ดูแล', reg.supervisor),
-            _buildInfoTile(Icons.phone_rounded, 'เบอร์ติดต่อ', reg.phone),
-            _buildInfoTile(
-              _contactIcon(reg.contactChannel),
-              'ช่องทางติดต่อ (${reg.contactChannel})',
-              reg.contactId,
+              Icons.info_outline_rounded,
+              'สถานะ',
+              widget.statusLabel,
             ),
             const SizedBox(height: 24),
 
             // ── แผนที่ ──
-            _buildSection('สถานที่'),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                height: 200,
-                child: Stack(
-                  children: [
-                    GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: LatLng(reg.lat, reg.lng),
-                        zoom: 16,
-                      ),
-                      onMapCreated: (c) => _mapController = c,
-                      markers: {
-                        Marker(
-                          markerId: const MarkerId('reg_location'),
-                          position: LatLng(reg.lat, reg.lng),
-                          infoWindow: InfoWindow(
-                            title: reg.title,
-                            snippet: reg.organization,
-                          ),
+            if (hasMap) ...[
+              _buildSection('สถานที่'),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  height: 200,
+                  child: Stack(
+                    children: [
+                      GoogleMap(
+                        initialCameraPosition: CameraPosition(
+                          target: LatLng(lat, lng),
+                          zoom: 16,
                         ),
-                      },
-                      zoomControlsEnabled: false,
-                      zoomGesturesEnabled: true,
-                      scrollGesturesEnabled: true,
-                      rotateGesturesEnabled: false,
-                      tiltGesturesEnabled: false,
-                      myLocationButtonEnabled: false,
-                    ),
-                    Positioned(
-                      right: 10,
-                      bottom: 10,
-                      child: Column(
-                        children: [
-                          _buildZoomBtn(Icons.add, _zoomIn),
-                          const SizedBox(height: 6),
-                          _buildZoomBtn(Icons.remove, _zoomOut),
-                        ],
+                        onMapCreated: (c) => _mapController = c,
+                        markers: {
+                          Marker(
+                            markerId: const MarkerId('reg_location'),
+                            position: LatLng(lat, lng),
+                            infoWindow: InfoWindow(title: title),
+                          ),
+                        },
+                        zoomControlsEnabled: false,
+                        zoomGesturesEnabled: true,
+                        scrollGesturesEnabled: true,
+                        rotateGesturesEnabled: false,
+                        tiltGesturesEnabled: false,
+                        myLocationButtonEnabled: false,
                       ),
-                    ),
-                  ],
+                      Positioned(
+                        right: 10,
+                        bottom: 10,
+                        child: Column(
+                          children: [
+                            _buildZoomBtn(Icons.add, _zoomIn),
+                            const SizedBox(height: 6),
+                            _buildZoomBtn(Icons.remove, _zoomOut),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
+            ],
 
             // ── แนบไฟล์ส่งงาน ──
             _buildSection('ส่งงาน'),
@@ -542,8 +652,11 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
                 ),
                 child: Column(
                   children: [
-                    Icon(Icons.cloud_upload_rounded,
-                        size: 36, color: AppTheme.primary),
+                    Icon(
+                      Icons.cloud_upload_rounded,
+                      size: 36,
+                      color: AppTheme.primary,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'แตะเพื่อเลือกไฟล์',
@@ -557,7 +670,9 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
                     Text(
                       'รองรับ PDF, Word, Excel',
                       style: TextStyle(
-                          fontSize: 12, color: Colors.grey.shade500),
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
                     ),
                   ],
                 ),
@@ -587,8 +702,11 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
                           color: _fileColor(ext).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(_fileIcon(ext),
-                            size: 22, color: _fileColor(ext)),
+                        child: Icon(
+                          _fileIcon(ext),
+                          size: 22,
+                          color: _fileColor(ext),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -608,8 +726,9 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
                             Text(
                               '${ext?.toUpperCase() ?? ''} • ${_formatSize(file.size)}',
                               style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppTheme.textSecondary),
+                                fontSize: 11,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
                           ],
                         ),
@@ -623,8 +742,11 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
                             color: Colors.red.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.close_rounded,
-                              size: 18, color: Colors.red),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: Colors.red,
+                          ),
                         ),
                       ),
                     ],
@@ -655,14 +777,36 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
                   icon: const Icon(Icons.send_rounded, size: 20),
                   label: const Text(
                     'ส่งงาน',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Unregister button
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: _handleUnregister,
+                icon: const Icon(Icons.cancel_outlined, size: 20),
+                label: const Text(
+                  'ถอนการลงทะเบียน',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red, width: 1.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
@@ -707,7 +851,9 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
                 Text(
                   label,
                   style: const TextStyle(
-                      fontSize: 12, color: AppTheme.textSecondary),
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -724,15 +870,6 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
         ],
       ),
     );
-  }
-
-  IconData _contactIcon(String channel) {
-    return switch (channel) {
-      'Line' => Icons.chat_bubble_rounded,
-      'Facebook' => Icons.facebook_rounded,
-      'IG' => Icons.camera_alt_rounded,
-      _ => Icons.contact_mail_rounded,
-    };
   }
 
   Widget _buildZoomBtn(IconData icon, VoidCallback onTap) {

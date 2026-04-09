@@ -4,6 +4,8 @@ import (
 	"problem-service/config"
 	"problem-service/models"
 
+	"socialdev/shared/events"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
@@ -46,7 +48,12 @@ func Create(c fiber.Ctx) error {
 	if err := config.DB.Create(&p).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
-	// TODO: publish event problem.created
+	events.Publish(events.TopicProblemCreated, map[string]interface{}{
+		"problem_id": p.ID,
+		"owner_id":   p.OwnerID,
+		"category":   p.Category,
+		"title":      p.Title,
+	})
 	return c.Status(201).JSON(p)
 }
 
@@ -64,7 +71,10 @@ func UpdateStatus(c fiber.Ctx) error {
 	if err := config.DB.Model(&models.Problem{}).Where("id = ?", id).Update("status", body.Status).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
-	// TODO: publish event problem.status.changed
+	events.Publish(events.TopicProblemStatusChanged, map[string]interface{}{
+		"problem_id": id,
+		"status":     body.Status,
+	})
 	return c.JSON(fiber.Map{"ok": true})
 }
 

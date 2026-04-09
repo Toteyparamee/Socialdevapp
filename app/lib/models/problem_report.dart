@@ -33,6 +33,69 @@ class ProblemReport {
     this.imageUrls = const [],
   });
 
+  factory ProblemReport.fromJson(Map<String, dynamic> json) {
+    return ProblemReport(
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      description: json['description'] ?? '',
+      category: _parseCategory(json['category'] ?? ''),
+      status: _parseStatus(json['status'] ?? ''),
+      source: _parseSource(json['source'] ?? ''),
+      location: LatLng(
+        (json['lat'] as num?)?.toDouble() ?? 0,
+        (json['lng'] as num?)?.toDouble() ?? 0,
+      ),
+      address: json['address'] ?? '',
+      createdAt: DateTime.parse(json['created_at']),
+      reportedBy: json['owner_id'] ?? '',
+      imageUrls: (json['image_ids'] as List?)?.cast<String>() ?? [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'description': description,
+    'category': _categoryToString(category),
+    'source': _sourceToString(source),
+    'lat': location.latitude,
+    'lng': location.longitude,
+    'address': address,
+  };
+
+  static ProblemCategory _parseCategory(String s) => switch (s) {
+    'flood' => ProblemCategory.flood,
+    'trash' => ProblemCategory.trash,
+    'traffic' => ProblemCategory.traffic,
+    'infrastructure' => ProblemCategory.infrastructure,
+    _ => ProblemCategory.other,
+  };
+
+  static ProblemStatus _parseStatus(String s) => switch (s) {
+    'in_progress' => ProblemStatus.inProgress,
+    'resolved' => ProblemStatus.resolved,
+    _ => ProblemStatus.pending,
+  };
+
+  static ProblemSource _parseSource(String s) => switch (s) {
+    'government' => ProblemSource.government,
+    'urgent' => ProblemSource.urgent,
+    _ => ProblemSource.user,
+  };
+
+  static String _categoryToString(ProblemCategory c) => switch (c) {
+    ProblemCategory.flood => 'flood',
+    ProblemCategory.trash => 'trash',
+    ProblemCategory.traffic => 'traffic',
+    ProblemCategory.infrastructure => 'infrastructure',
+    ProblemCategory.other => 'other',
+  };
+
+  static String _sourceToString(ProblemSource s) => switch (s) {
+    ProblemSource.user => 'user',
+    ProblemSource.government => 'government',
+    ProblemSource.urgent => 'urgent',
+  };
+
   String get categoryLabel {
     switch (category) {
       case ProblemCategory.flood:
@@ -70,77 +133,3 @@ class ProblemReport {
     }
   }
 }
-
-// Sample data for demo
-final List<ProblemReport> sampleProblems = [
-  ProblemReport(
-    id: '1',
-    title: 'น้ำท่วมถนนหลัก',
-    description:
-        'น้ำท่วมสูงประมาณ 30 ซม. บริเวณถนนพหลโยธิน ใกล้แยกเกษตร ทำให้การจราจรติดขัดมาก รถเล็กไม่สามารถผ่านได้',
-    category: ProblemCategory.flood,
-    status: ProblemStatus.inProgress,
-    source: ProblemSource.urgent,
-    location: const LatLng(13.8446, 100.5714),
-    address: 'ถนนพหลโยธิน แยกเกษตร',
-    createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-    reportedBy: 'นักเรียน 65012345',
-    imageUrls: ['https://picsum.photos/400/300?random=1'],
-  ),
-  ProblemReport(
-    id: '2',
-    title: 'ขยะกองใหญ่ริมทาง',
-    description:
-        'มีขยะกองใหญ่สะสมบริเวณซอยลาดพร้าว 71 ส่งกลิ่นเหม็นรบกวนชาวบ้านในพื้นที่',
-    category: ProblemCategory.trash,
-    status: ProblemStatus.pending,
-    source: ProblemSource.user,
-    location: const LatLng(13.8100, 100.5800),
-    address: 'ซอยลาดพร้าว 71',
-    createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-    reportedBy: 'หน่วยงาน',
-    imageUrls: ['https://picsum.photos/400/300?random=2'],
-  ),
-  ProblemReport(
-    id: '3',
-    title: 'ไฟถนนเสีย 5 ดวง',
-    description:
-        'ไฟถนนเสียต่อเนื่อง 5 ดวง บริเวณถนนรัชดาภิเษก ช่วงหน้า MRT ลาดพร้าว ทำให้มืดมากในเวลากลางคืน',
-    category: ProblemCategory.infrastructure,
-    status: ProblemStatus.resolved,
-    source: ProblemSource.government,
-    location: const LatLng(13.8050, 100.5620),
-    address: 'ถนนรัชดาภิเษก หน้า MRT ลาดพร้าว',
-    createdAt: DateTime.now().subtract(const Duration(days: 1)),
-    reportedBy: 'ครูประจำ',
-    imageUrls: ['https://picsum.photos/400/300?random=3'],
-  ),
-  ProblemReport(
-    id: '4',
-    title: 'สัญญาณไฟจราจรขัดข้อง',
-    description:
-        'สัญญาณไฟจราจรบริเวณแยกรัชโยธิน ไฟเขียวเปิดเพียง 5 วินาที ทำให้รถติดยาวมาก',
-    category: ProblemCategory.traffic,
-    status: ProblemStatus.pending,
-    source: ProblemSource.user,
-    location: const LatLng(13.8380, 100.5690),
-    address: 'แยกรัชโยธิน',
-    createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-    reportedBy: 'นักเรียน 65099887',
-    imageUrls: ['https://picsum.photos/400/300?random=4'],
-  ),
-  ProblemReport(
-    id: '5',
-    title: 'ท่อระบายน้ำอุดตัน',
-    description:
-        'ท่อระบายน้ำอุดตันบริเวณปากซอยวิภาวดี 20 เมื่อฝนตกน้ำจะท่วมขังทุกครั้ง',
-    category: ProblemCategory.flood,
-    status: ProblemStatus.inProgress,
-    source: ProblemSource.government,
-    location: const LatLng(13.8300, 100.5550),
-    address: 'ปากซอยวิภาวดี 20',
-    createdAt: DateTime.now().subtract(const Duration(days: 2)),
-    reportedBy: 'เทศบาล',
-    imageUrls: ['https://picsum.photos/400/300?random=5'],
-  ),
-];
