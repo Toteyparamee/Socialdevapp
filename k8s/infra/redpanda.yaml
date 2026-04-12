@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redpanda
+  namespace: socialdev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: redpanda
+    spec:
+      containers:
+        - name: redpanda
+          image: redpandadata/redpanda:v24.2.7
+          args:
+            - redpanda
+            - start
+            - --smp=1
+            - --memory=1G
+            - --reserve-memory=0M
+            - --overprovisioned
+            - --node-id=0
+            - --check=false
+            - --kafka-addr=PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+            - --advertise-kafka-addr=PLAINTEXT://redpanda:9092,OUTSIDE://localhost:19092
+          ports:
+            - containerPort: 9092
+              name: kafka
+            - containerPort: 19092
+              name: kafka-external
+            - containerPort: 9644
+              name: admin
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "rpk cluster health | grep -q 'Healthy:.*true'"
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda
+  namespace: socialdev
+spec:
+  selector:
+    app: redpanda
+  ports:
+    - port: 9092
+      targetPort: 9092
+      name: kafka
+    - port: 19092
+      targetPort: 19092
+      name: kafka-external
+    - port: 9644
+      targetPort: 9644
+      name: admin
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redpanda-console
+  namespace: socialdev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda-console
+  template:
+    metadata:
+      labels:
+        app: redpanda-console
+    spec:
+      containers:
+        - name: console
+          image: redpandadata/console:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: KAFKA_BROKERS
+              value: redpanda:9092
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda-console
+  namespace: socialdev
+spec:
+  selector:
+    app: redpanda-console
+  ports:
+    - port: 8080
+      targetPort: 8080

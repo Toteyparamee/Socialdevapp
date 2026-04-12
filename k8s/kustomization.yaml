@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: socialdev
+
+resources:
+  # Namespace & shared config
+  - namespace.yaml
+  - secrets.yaml
+  - configmap.yaml
+
+  # Infrastructure (Postgres อยู่ภายนอกที่ 10.194.1.43 ผ่าน VPN)
+  - infra/minio.yaml
+  - infra/redpanda.yaml
+
+  # Application services
+  - apps/auth.yaml
+  - apps/image.yaml
+  - apps/problem.yaml
+  - apps/activity.yaml
+  - apps/chat.yaml
+  - apps/notification.yaml
+  - apps/analytics.yaml

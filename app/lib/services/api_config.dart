@@ -6,9 +6,14 @@ class ApiConfig {
   static final String _host =
       Platform.isAndroid ? '10.0.2.2' : 'localhost';
 
-  static String get loginUrl => 'http://$_host:8080';
-  static String get imageUrl => 'http://$_host:8081';
-  static String get problemUrl => 'http://$_host:8083';
-  static String get activityUrl => 'http://$_host:8084';
-  static String get chatUrl => 'http://$_host:8085';
+  /// Kong gateway port (NodePort 30000)
+  static const int _kongPort = 30000;
+
+  static String get gateway => 'http://$_host:$_kongPort';
+
+  static String get loginUrl => gateway;
+  static String get imageUrl => gateway;
+  static String get problemUrl => gateway;
+  static String get activityUrl => gateway;
+  static String get chatUrl => gateway;
 }

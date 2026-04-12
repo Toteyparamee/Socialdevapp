@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: socialdev
+data:
+  DB_HOST: "10.194.1.43"
+  DB_PORT: "5432"
+  DB_USER: postgres
+  KAFKA_BROKERS: redpanda:9092
+  MINIO_ENDPOINT: minio:9000
+  MINIO_BUCKET: socialdev
+  MINIO_USE_SSL: "false"
+  MINIO_PUBLIC_URL: http://minio:9000
+
+  AUTH0_DOMAIN: dev-p6m40iaxhz0i543y.us.auth0.com
+  AUTH0_CLIENT_ID: aBJe4HwBKfZ98XiWgfVKios2UrGx6PU3
