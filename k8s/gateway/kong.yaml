@@ -1,3 +1,74 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kong-serviceaccount
+  namespace: kong
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kong-ingress-clusterrole
+rules:
+  - apiGroups: [""]
+    resources:
+      - endpoints
+      - nodes
+      - pods
+      - secrets
+      - services
+      - namespaces
+    verbs: ["list", "watch", "get"]
+  - apiGroups: [""]
+    resources:
+      - events
+    verbs: ["create", "patch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - ingressclasses
+    verbs: ["list", "watch", "get"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses/status
+    verbs: ["update"]
+  - apiGroups: ["configuration.konghq.com"]
+    resources: ["*"]
+    verbs: ["list", "watch", "get"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources:
+      - gateways
+      - gatewayclasses
+      - httproutes
+      - referencegrants
+      - tcproutes
+      - tlsroutes
+      - udproutes
+      - grpcroutes
+    verbs: ["list", "watch", "get"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources:
+      - gateways/status
+      - httproutes/status
+      - gatewayclasses/status
+    verbs: ["update"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
+    verbs: ["list", "watch", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kong-ingress-clusterrole-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kong-ingress-clusterrole
+subjects:
+  - kind: ServiceAccount
+    name: kong-serviceaccount
+    namespace: kong
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,42 +84,34 @@ spec:
       labels:
         app: kong
     spec:
+      serviceAccountName: kong-serviceaccount
       containers:
-        - name: kong
+        - name: proxy
           image: kong:3.9
           ports:
             - containerPort: 8000
               name: proxy
+            - containerPort: 8443
+              name: proxy-ssl
             - containerPort: 8001
               name: admin
           env:
             - name: KONG_DATABASE
-              valueFrom:
-                configMapKeyRef:
-                  name: kong-config
-                  key: KONG_DATABASE
+              value: "off"
             - name: KONG_PROXY_LISTEN
-              valueFrom:
-                configMapKeyRef:
-                  name: kong-config
-                  key: KONG_PROXY_LISTEN
+              value: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
             - name: KONG_ADMIN_LISTEN
-              valueFrom:
-                configMapKeyRef:
-                  name: kong-config
-                  key: KONG_ADMIN_LISTEN
-            - name: KONG_DECLARATIVE_CONFIG
-              valueFrom:
-                configMapKeyRef:
-                  name: kong-config
-                  key: KONG_DECLARATIVE_CONFIG
-          volumeMounts:
-            - name: kong-declarative
-              mountPath: /etc/kong
+              value: "127.0.0.1:8001"
+            - name: KONG_STATUS_LISTEN
+              value: "0.0.0.0:8100"
+            - name: KONG_PROXY_ACCESS_LOG
+              value: /dev/stdout
+            - name: KONG_PROXY_ERROR_LOG
+              value: /dev/stderr
           readinessProbe:
             httpGet:
               path: /status
-              port: 8001
+              port: 8100
             initialDelaySeconds: 10
             periodSeconds: 10
           resources:
@@ -58,10 +121,30 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
-      volumes:
-        - name: kong-declarative
-          configMap:
-            name: kong-declarative
+
+        - name: ingress-controller
+          image: kong/kubernetes-ingress-controller:3.3
+          args:
+            - --kong-admin-url=http://127.0.0.1:8001
+            - --publish-service=kong/kong-proxy
+            - --ingress-class=kong
+            - --feature-gates=GatewayAlpha=false
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
@@ -73,11 +156,11 @@ spec:
   selector:
     app: kong
   ports:
-    - port: 8000
+    - port: 80
       targetPort: 8000
       nodePort: 30000
       name: proxy
-    - port: 8001
-      targetPort: 8001
-      nodePort: 30001
-      name: admin
+    - port: 443
+      targetPort: 8443
+      nodePort: 30443
+      name: proxy-ssl

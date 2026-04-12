@@ -1,0 +1,95 @@
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: kong
+spec:
+  controller: ingress-controllers.konghq.com/kong
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: socialdev-ingress
+  namespace: socialdev
+  annotations:
+    konghq.com/strip-path: "false"
+spec:
+  ingressClassName: kong
+  rules:
+    - http:
+        paths:
+          # Auth service
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: auth
+                port:
+                  number: 8080
+          - path: /users
+            pathType: Prefix
+            backend:
+              service:
+                name: auth
+                port:
+                  number: 8080
+
+          # Image service
+          - path: /api/images
+            pathType: Prefix
+            backend:
+              service:
+                name: image
+                port:
+                  number: 8081
+          - path: /images
+            pathType: Prefix
+            backend:
+              service:
+                name: image
+                port:
+                  number: 8081
+
+          # Problem service
+          - path: /api/problems
+            pathType: Prefix
+            backend:
+              service:
+                name: problem
+                port:
+                  number: 8083
+
+          # Activity service
+          - path: /api/activities
+            pathType: Prefix
+            backend:
+              service:
+                name: activity
+                port:
+                  number: 8084
+
+          # Chat service
+          - path: /api/chat
+            pathType: Prefix
+            backend:
+              service:
+                name: chat
+                port:
+                  number: 8085
+
+          # Notification service
+          - path: /api/notifications
+            pathType: Prefix
+            backend:
+              service:
+                name: notification
+                port:
+                  number: 8086
+
+          # Analytics service
+          - path: /api/analytics
+            pathType: Prefix
+            backend:
+              service:
+                name: analytics
+                port:
+                  number: 8087
