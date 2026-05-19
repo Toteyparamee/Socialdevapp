@@ -13,14 +13,16 @@ spec:
       labels:
         app: image
     spec:
+      imagePullSecrets:
+        - name: gitlab-registry
       initContainers:
         - name: wait-postgres
           image: busybox:1.36
           command: ["sh", "-c", "until nc -z 10.194.1.43 5432; do sleep 2; done"]
       containers:
         - name: image
-          image: socialdevapp-image:latest
-          imagePullPolicy: IfNotPresent
+          image: registry.kpinnovative.co.th/paramee/server_socialdev/image:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8081
           env:
@@ -44,14 +46,14 @@ spec:
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: db-socialdev
+                  key: DB_PASSWORD
             - name: DB_NAME
               value: socialdev_image
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: app-secret
+                  name: jwt-secret
                   key: JWT_SECRET
             - name: KAFKA_BROKERS
               valueFrom:
@@ -66,12 +68,12 @@ spec:
             - name: MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: app-secret
+                  name: minio-secret
                   key: MINIO_ACCESS_KEY
             - name: MINIO_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: app-secret
+                  name: minio-secret
                   key: MINIO_SECRET_KEY
             - name: MINIO_BUCKET
               valueFrom:

@@ -6,6 +6,7 @@ import 'services/auth_service.dart';
 import 'services/problem_service.dart';
 import 'services/activity_service.dart';
 import 'services/chat_service.dart';
+import 'services/image_service.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/student/student_screen.dart';
 import 'screens/teacher/teacher_screen.dart';
@@ -41,6 +42,9 @@ class CommunityReportApp extends StatelessWidget {
               ),
               ChangeNotifierProvider(
                 create: (_) => ChatService(auth),
+              ),
+              Provider(
+                create: (_) => ImageService(auth),
               ),
             ],
             child: MaterialApp(

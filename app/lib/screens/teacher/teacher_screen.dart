@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../models/activity.dart';
 import '../../services/auth_service.dart';
+import '../../services/activity_service.dart';
+import '../../services/image_service.dart';
 import '../student/school_activities_screen.dart';
 import '../student/chat_screen.dart';
 import 'add_activity_screen.dart';
@@ -125,24 +129,7 @@ class _HomeTabState extends State<_HomeTab> {
   Timer? _autoScrollTimer;
   int _currentBanner = 0;
   DateTime? _selectedDate;
-
-  static const _banners = [
-    _BannerData(
-      image: 'https://picsum.photos/seed/tnews1/800/400',
-      title: 'ประชุมครูประจำเดือน',
-      subtitle: '10 เม.ย. 69 ณ ห้องประชุมใหญ่',
-    ),
-    _BannerData(
-      image: 'https://picsum.photos/seed/tnews2/800/400',
-      title: 'ส่งคะแนนปลายภาค 1/2569',
-      subtitle: 'ภายในวันที่ 25 เม.ย. 69',
-    ),
-    _BannerData(
-      image: 'https://picsum.photos/seed/tnews3/800/400',
-      title: 'อบรมเชิงปฏิบัติการ',
-      subtitle: '15-16 เม.ย. 69 หลักสูตรใหม่',
-    ),
-  ];
+  List<Activity> _bannerActivities = [];
 
   // เมนูลัด — เพิ่ม "เพิ่มกิจกรรม" และ "ตรวจงานนักเรียน"
   static const _menus = [
@@ -171,6 +158,19 @@ class _HomeTabState extends State<_HomeTab> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadBanners());
+  }
+
+  Future<void> _loadBanners() async {
+    final svc = context.read<ActivityService>();
+    await svc.fetchActivities();
+    if (!mounted) return;
+    final all = svc.activities;
+    final withImages = all.where((a) => a.imageIds.isNotEmpty).toList();
+    final source = withImages.isNotEmpty ? withImages : all;
+    if (source.isEmpty) return;
+    final picks = (source.toList()..shuffle(Random())).take(5).toList();
+    setState(() => _bannerActivities = picks);
     _startAutoScroll();
   }
 
@@ -183,8 +183,8 @@ class _HomeTabState extends State<_HomeTab> {
 
   void _startAutoScroll() {
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!mounted) return;
-      final next = (_currentBanner + 1) % _banners.length;
+      if (!mounted || _bannerActivities.isEmpty) return;
+      final next = (_currentBanner + 1) % _bannerActivities.length;
       _bannerController.animateToPage(
         next,
         duration: const Duration(milliseconds: 500),
@@ -263,69 +263,97 @@ class _HomeTabState extends State<_HomeTab> {
                   children: [
                     SizedBox(
                       height: 170,
-                      child: PageView.builder(
-                        controller: _bannerController,
-                        itemCount: _banners.length,
-                        onPageChanged: (i) =>
-                            setState(() => _currentBanner = i),
-                        itemBuilder: (context, i) {
-                          final b = _banners[i];
-                          return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 2),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              image: DecorationImage(
-                                image: NetworkImage(b.image),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            child: Container(
+                      child: _bannerActivities.isEmpty
+                          ? Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(16),
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.transparent,
-                                    Colors.black.withValues(alpha: 0.7),
-                                  ],
-                                ),
+                                color: AppTheme.primary.withValues(alpha: 0.1),
                               ),
-                              padding: const EdgeInsets.all(16),
-                              alignment: Alignment.bottomLeft,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    b.title,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    b.subtitle,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.85,
+                              alignment: Alignment.center,
+                              child: const CircularProgressIndicator(),
+                            )
+                          : PageView.builder(
+                              controller: _bannerController,
+                              itemCount: _bannerActivities.length,
+                              onPageChanged: (i) =>
+                                  setState(() => _currentBanner = i),
+                              itemBuilder: (context, i) {
+                                final act = _bannerActivities[i];
+                                final imgSvc = context.read<ImageService>();
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      act.imageIds.isNotEmpty
+                                          ? Image.network(
+                                              imgSvc.getImageUrl(act.imageIds.first),
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  Container(color: const Color(0xFFE8ECF0)),
+                                            )
+                                          : Container(
+                                              color: AppTheme.primary.withValues(alpha: 0.15),
+                                              child: const Icon(
+                                                Icons.event_rounded,
+                                                size: 48,
+                                                color: AppTheme.primary,
+                                              ),
+                                            ),
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              Colors.transparent,
+                                              Colors.black.withValues(alpha: 0.7),
+                                            ],
+                                          ),
+                                        ),
                                       ),
-                                      fontSize: 12,
-                                    ),
+                                      Positioned(
+                                        left: 16,
+                                        right: 16,
+                                        bottom: 16,
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              act.title,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              act.location,
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(alpha: 0.85),
+                                                fontSize: 12,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
                     ),
                     const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(_banners.length, (i) {
+                      children: List.generate(_bannerActivities.length, (i) {
                         final isActive = i == _currentBanner;
                         return AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
@@ -855,17 +883,6 @@ class _HomeTabState extends State<_HomeTab> {
       ),
     );
   }
-}
-
-class _BannerData {
-  final String image;
-  final String title;
-  final String subtitle;
-  const _BannerData({
-    required this.image,
-    required this.title,
-    required this.subtitle,
-  });
 }
 
 class _MenuData {

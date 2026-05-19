@@ -1,6 +1,6 @@
 module login-service
 
-go 1.25.5
+go 1.25.0
 
 replace socialdev/shared => ../shared
 

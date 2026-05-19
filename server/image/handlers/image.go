@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -78,15 +79,40 @@ func Get(c fiber.Ctx) error {
 }
 
 func Presign(c fiber.Ctx) error {
-	img, err := findOwned(c)
-	if err != nil {
-		return err
+	id := c.Params("id")
+	var img models.Image
+	if err := config.DB.Where("id = ?", id).First(&img).Error; err != nil {
+		return fiber.NewError(fiber.StatusNotFound, "image not found")
 	}
-	url, err := services.Presign(c.Context(), img.Key, 15*time.Minute)
+	ttl := 1 * time.Hour
+	presignURL, err := services.Presign(c.Context(), img.Key, ttl)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
-	return c.JSON(fiber.Map{"url": url})
+	return c.JSON(fiber.Map{
+		"url":        presignURL,
+		"expires_at": time.Now().Add(ttl).UTC(),
+	})
+}
+
+func Serve(c fiber.Ctx) error {
+	id := c.Params("id")
+	var img models.Image
+	if err := config.DB.Where("id = ?", id).First(&img).Error; err != nil {
+		return fiber.NewError(fiber.StatusNotFound, "image not found")
+	}
+	obj, mime, err := services.Download(c.Context(), img.Key)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	}
+	defer obj.Close()
+	data, err := io.ReadAll(obj)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	}
+	c.Set("Content-Type", mime)
+	c.Set("Cache-Control", "public, max-age=3600")
+	return c.Send(data)
 }
 
 func Delete(c fiber.Ctx) error {

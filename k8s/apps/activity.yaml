@@ -13,14 +13,16 @@ spec:
       labels:
         app: activity
     spec:
+      imagePullSecrets:
+        - name: gitlab-registry
       initContainers:
         - name: wait-postgres
           image: busybox:1.36
           command: ["sh", "-c", "until nc -z 10.194.1.43 5432; do sleep 2; done"]
       containers:
         - name: activity
-          image: socialdevapp-activity:latest
-          imagePullPolicy: IfNotPresent
+          image: registry.kpinnovative.co.th/paramee/server_socialdev/activity:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8084
           env:
@@ -44,14 +46,14 @@ spec:
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
+                  name: db-socialdev
+                  key: DB_PASSWORD
             - name: DB_NAME
               value: socialdev_activity
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: app-secret
+                  name: jwt-secret
                   key: JWT_SECRET
             - name: KAFKA_BROKERS
               valueFrom:

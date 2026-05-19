@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_appauth/flutter_appauth.dart';
@@ -148,22 +150,34 @@ class AuthService extends ChangeNotifier {
 
   // ── Login with Google (ผ่าน Auth0) ──
   Future<void> loginWithGoogle({String role = 'นักเรียน'}) async {
-    // Step 1: เปิด Auth0 login → ได้ access_token
-    final result = await _appAuth.authorizeAndExchangeCode(
-      AuthorizationTokenRequest(
-        _auth0ClientId,
-        _auth0RedirectUri,
-        issuer: 'https://$_auth0Domain',
-        scopes: ['openid', 'profile', 'email'],
-        additionalParameters: {'connection': 'google-oauth2'},
-      ),
-    );
+    final AuthorizationTokenResponse result;
+    try {
+      result = await _appAuth
+          .authorizeAndExchangeCode(
+            AuthorizationTokenRequest(
+              _auth0ClientId,
+              _auth0RedirectUri,
+              issuer: 'https://$_auth0Domain',
+              scopes: ['openid', 'profile', 'email'],
+              additionalParameters: {'connection': 'google-oauth2'},
+            ),
+          )
+          .timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      throw AuthException('Google login หมดเวลา กรุณาลองใหม่');
+    } on PlatformException catch (e) {
+      if (e.code == 'org.openid.appauth.general' ||
+          (e.message ?? '').contains('cancel') ||
+          (e.message ?? '').contains('User cancelled')) {
+        throw AuthException('ยกเลิก Google login');
+      }
+      throw AuthException('Google login ไม่สำเร็จ: ${e.message}');
+    }
 
     if (result.accessToken == null) {
       throw AuthException('Google login ถูกยกเลิก');
     }
 
-    // Step 2: ส่ง access_token ไป backend เพื่อ verify + สร้าง JWT
     final response = await http
         .post(
           Uri.parse('$_baseUrl/auth/google'),
@@ -211,7 +225,6 @@ class AuthService extends ChangeNotifier {
   final Map<String, String> _nameCache = {};
 
   Future<Map<String, String>> lookupUsers(List<String> ids) async {
-    // Filter out already cached
     final missing = ids.where((id) => !_nameCache.containsKey(id)).toList();
 
     if (missing.isNotEmpty) {
@@ -235,7 +248,6 @@ class AuthService extends ChangeNotifier {
         debugPrint('[lookup] error: $e');
       }
 
-      // Fill missing with fallback
       for (final id in missing) {
         _nameCache.putIfAbsent(id, () => 'User $id');
       }

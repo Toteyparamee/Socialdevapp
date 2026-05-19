@@ -1,12 +1,21 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../models/activity.dart';
 import '../../services/activity_service.dart';
+import '../../services/api_config.dart';
+import '../../services/auth_service.dart';
 
 class AddActivityScreen extends StatefulWidget {
-  const AddActivityScreen({super.key});
+  final Activity? editActivity;
+  const AddActivityScreen({super.key, this.editActivity});
 
   @override
   State<AddActivityScreen> createState() => _AddActivityScreenState();
@@ -22,6 +31,30 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
   final _supervisorPhoneCtrl = TextEditingController();
   DateTime? _date;
   LatLng? _pickedLocation;
+  final List<XFile> _images = [];
+  List<String> _existingImageIds = [];
+  bool _isSubmitting = false;
+
+  bool get _isEditing => widget.editActivity != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final a = widget.editActivity;
+    if (a != null) {
+      _titleCtrl.text = a.title;
+      _descCtrl.text = a.description;
+      _locationCtrl.text = a.location;
+      _seatsCtrl.text = a.maxSlots.toString();
+      _supervisorCtrl.text = a.supervisor;
+      _supervisorPhoneCtrl.text = a.supervisorPhone;
+      _date = a.startAt.toLocal();
+      if (a.latitude != null && a.longitude != null) {
+        _pickedLocation = LatLng(a.latitude!, a.longitude!);
+      }
+      _existingImageIds = List.from(a.imageIds);
+    }
+  }
 
   @override
   void dispose() {
@@ -67,6 +100,61 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
     }
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: source,
+      maxWidth: 1200,
+      maxHeight: 1200,
+      imageQuality: 75,
+    );
+    if (picked != null) {
+      setState(() => _images.add(picked));
+    }
+  }
+
+  Future<List<String>> _uploadImages() async {
+    if (_images.isEmpty) return const [];
+    final auth = context.read<AuthService>();
+    final uri = Uri.parse(ApiConfig.imageBase);
+    final ids = <String>[];
+
+    for (final img in _images) {
+      final request = http.MultipartRequest('POST', uri);
+      request.headers.addAll(auth.authHeaders);
+      request.fields['folder'] = 'activity';
+
+      final bytes = await img.readAsBytes();
+      final ext = img.path.split('.').last.toLowerCase();
+      final mime = ext == 'png'
+          ? 'image/png'
+          : ext == 'webp'
+          ? 'image/webp'
+          : 'image/jpeg';
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: img.name,
+          contentType: MediaType.parse(mime),
+        ),
+      );
+
+      final streamed = await request.send().timeout(
+        const Duration(seconds: 30),
+      );
+      final body = await streamed.stream.bytesToString();
+      if (streamed.statusCode != 201) {
+        throw Exception(
+          'upload failed: HTTP ${streamed.statusCode} — $body',
+        );
+      }
+      ids.add(jsonDecode(body)['id'] as String);
+    }
+    return ids;
+  }
+
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
@@ -86,33 +174,72 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       return;
     }
 
-    final startAt = _date!;
-    final endAt = startAt.add(const Duration(hours: 8));
+    setState(() => _isSubmitting = true);
 
-    final success = await context.read<ActivityService>().createActivity(
-      title: _titleCtrl.text.trim(),
-      description: _descCtrl.text.trim(),
-      location: _locationCtrl.text.trim(),
-      latitude: _pickedLocation?.latitude,
-      longitude: _pickedLocation?.longitude,
-      supervisor: _supervisorCtrl.text.trim(),
-      supervisorPhone: _supervisorPhoneCtrl.text.trim(),
-      startAt: startAt,
-      endAt: endAt,
-      maxSlots: int.tryParse(_seatsCtrl.text.trim()) ?? 30,
-    );
+    List<String> newImageIds;
+    try {
+      newImageIds = await _uploadImages();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('อัปโหลดรูปไม่สำเร็จ: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 6),
+        ),
+      );
+      return;
+    }
 
     if (!mounted) return;
 
+    final allImageIds = [..._existingImageIds, ...newImageIds];
+    final startAt = _date!;
+    final endAt = startAt.add(const Duration(hours: 8));
+    final svc = context.read<ActivityService>();
+
+    final success = _isEditing
+        ? await svc.updateActivity(
+            id: widget.editActivity!.id,
+            title: _titleCtrl.text.trim(),
+            description: _descCtrl.text.trim(),
+            location: _locationCtrl.text.trim(),
+            latitude: _pickedLocation?.latitude,
+            longitude: _pickedLocation?.longitude,
+            supervisor: _supervisorCtrl.text.trim(),
+            supervisorPhone: _supervisorPhoneCtrl.text.trim(),
+            startAt: startAt,
+            endAt: endAt,
+            maxSlots: int.tryParse(_seatsCtrl.text.trim()) ?? 30,
+            imageIds: allImageIds,
+          )
+        : await svc.createActivity(
+            title: _titleCtrl.text.trim(),
+            description: _descCtrl.text.trim(),
+            location: _locationCtrl.text.trim(),
+            latitude: _pickedLocation?.latitude,
+            longitude: _pickedLocation?.longitude,
+            supervisor: _supervisorCtrl.text.trim(),
+            supervisorPhone: _supervisorPhoneCtrl.text.trim(),
+            startAt: startAt,
+            endAt: endAt,
+            maxSlots: int.tryParse(_seatsCtrl.text.trim()) ?? 30,
+            imageIds: allImageIds,
+          );
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
     if (success) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('สร้างกิจกรรมสำเร็จ')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_isEditing ? 'แก้ไขกิจกรรมสำเร็จ' : 'สร้างกิจกรรมสำเร็จ')),
+      );
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('สร้างกิจกรรมไม่สำเร็จ ลองใหม่อีกครั้ง'),
+        SnackBar(
+          content: Text(_isEditing ? 'แก้ไขกิจกรรมไม่สำเร็จ' : 'สร้างกิจกรรมไม่สำเร็จ'),
           backgroundColor: Colors.red,
         ),
       );
@@ -124,7 +251,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
     return Scaffold(
       backgroundColor: AppTheme.inputBg,
       appBar: AppBar(
-        title: const Text('เพิ่มกิจกรรม'),
+        title: Text(_isEditing ? 'แก้ไขกิจกรรม' : 'เพิ่มกิจกรรม'),
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,
         elevation: 0,
@@ -272,11 +399,71 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+              _label('รูปภาพกิจกรรม'),
+              SizedBox(
+                height: 90,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _buildAddImageButton(
+                      icon: Icons.camera_alt_outlined,
+                      label: 'ถ่ายรูป',
+                      onTap: () => _pickImage(ImageSource.camera),
+                    ),
+                    const SizedBox(width: 10),
+                    _buildAddImageButton(
+                      icon: Icons.photo_library_outlined,
+                      label: 'เลือกรูป',
+                      onTap: () => _pickImage(ImageSource.gallery),
+                    ),
+                    ..._images.map(
+                      (img) => Padding(
+                        padding: const EdgeInsets.only(left: 10),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                File(img.path),
+                                width: 90,
+                                height: 90,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: GestureDetector(
+                                onTap: () =>
+                                    setState(() => _images.remove(img)),
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.5),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 28),
               SizedBox(
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _submit,
+                  onPressed: _isSubmitting ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,
@@ -284,10 +471,22 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text(
-                    'สร้างกิจกรรม',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          _isEditing ? 'บันทึกการแก้ไข' : 'สร้างกิจกรรม',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -308,6 +507,39 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       ),
     ),
   );
+
+  Widget _buildAddImageButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 90,
+        height: 90,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE8ECF0), width: 1.5),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: AppTheme.textSecondary, size: 24),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   InputDecoration _dec(String hint) => InputDecoration(
     hintText: hint,

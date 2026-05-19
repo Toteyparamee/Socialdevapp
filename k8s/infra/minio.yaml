@@ -46,6 +46,8 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: MINIO_SECRET_KEY
+            - name: MINIO_SERVER_URL
+              value: "https://socialdev.parameedev.online/storage"
           volumeMounts:
             - name: miniodata
               mountPath: /data

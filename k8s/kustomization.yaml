@@ -6,12 +6,14 @@ namespace: socialdev
 resources:
   # Namespace & shared config
   - namespace.yaml
-  - secrets.yaml
   - configmap.yaml
 
-  # Infrastructure (Postgres อยู่ภายนอกที่ 10.194.1.43 ผ่าน VPN)
-  - infra/minio.yaml
-  - infra/redpanda.yaml
+  # Secrets
+  - secrets/db-socialdev.yaml
+  - secrets/jwt-secret.yaml
+  - secrets/minio-secret.yaml
+
+  # Infrastructure (Postgres อยู่ภายนอกที่ 10.194.1.43, Minio ที่ 10.194.1.44, Kafka รันใน kub)
 
   # Application services
   - apps/auth.yaml

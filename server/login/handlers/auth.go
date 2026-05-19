@@ -218,6 +218,8 @@ type auth0UserInfo struct {
 	Picture string `json:"picture"`
 }
 
+var auth0Client = &http.Client{Timeout: 10 * time.Second}
+
 func getAuth0UserInfo(domain, accessToken string) (*auth0UserInfo, error) {
 	url := fmt.Sprintf("https://%s/userinfo", domain)
 
@@ -227,7 +229,7 @@ func getAuth0UserInfo(domain, accessToken string) (*auth0UserInfo, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := auth0Client.Do(req)
 	if err != nil {
 		return nil, err
 	}

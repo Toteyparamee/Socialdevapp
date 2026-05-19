@@ -10,13 +10,10 @@ import (
 func Setup(app *fiber.App) {
 	app.Get("/health", func(c fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok"}) })
 
-	// WebSocket — handled via fasthttp directly, bypass Fiber routing
-	app.Use(func(c fiber.Ctx) error {
-		if c.Path() == "/ws" {
-			handlers.HandleWebSocketFastHTTP(c.Context())
-			return nil
-		}
-		return c.Next()
+	// WebSocket — handled via fasthttp directly
+	app.Get("/ws", func(c fiber.Ctx) error {
+		handlers.HandleWebSocketFastHTTP(c.Context())
+		return nil
 	})
 
 	// REST API (kept for fetching history etc.)

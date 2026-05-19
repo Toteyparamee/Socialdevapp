@@ -12,10 +12,12 @@ func Register(app *fiber.App) {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
 
-	api := app.Group("/api/images", middleware.JWTAuth)
-	api.Post("/", handlers.Upload)
-	api.Get("/", handlers.List)
-	api.Get("/:id", handlers.Get)
-	api.Get("/:id/url", handlers.Presign)
-	api.Delete("/:id", handlers.Delete)
+	// Public — serve image data directly (no auth required)
+	app.Get("/api/images/:id/data", handlers.Serve)
+
+	// Protected routes
+	app.Post("/api/images", middleware.JWTAuth, handlers.Upload)
+	app.Get("/api/images", middleware.JWTAuth, handlers.List)
+	app.Get("/api/images/:id", middleware.JWTAuth, handlers.Get)
+	app.Delete("/api/images/:id", middleware.JWTAuth, handlers.Delete)
 }

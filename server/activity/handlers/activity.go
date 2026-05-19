@@ -165,6 +165,58 @@ func MyActivitySubmissions(c fiber.Ctx) error {
 	return c.JSON(result)
 }
 
+func DeleteActivity(c fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid id"})
+	}
+	uid, _ := c.Locals("user_id").(string)
+	result := config.DB.Where("id = ? AND teacher_id = ?", id, uid).Delete(&models.Activity{})
+	if result.Error != nil {
+		return c.Status(500).JSON(fiber.Map{"error": result.Error.Error()})
+	}
+	if result.RowsAffected == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "not found"})
+	}
+	return c.JSON(fiber.Map{"ok": true})
+}
+
+func UpdateActivity(c fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid id"})
+	}
+	uid, _ := c.Locals("user_id").(string)
+	var body models.Activity
+	if err := c.Bind().JSON(&body); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
+	result := config.DB.Model(&models.Activity{}).
+		Where("id = ? AND teacher_id = ?", id, uid).
+		Updates(map[string]interface{}{
+			"title":            body.Title,
+			"description":      body.Description,
+			"location":         body.Location,
+			"latitude":         body.Latitude,
+			"longitude":        body.Longitude,
+			"supervisor":       body.Supervisor,
+			"supervisor_phone": body.SupervisorPhone,
+			"start_at":         body.StartAt,
+			"end_at":           body.EndAt,
+			"max_slots":        body.MaxSlots,
+			"image_ids":        body.ImageIDs,
+		})
+	if result.Error != nil {
+		return c.Status(500).JSON(fiber.Map{"error": result.Error.Error()})
+	}
+	if result.RowsAffected == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "not found"})
+	}
+	var updated models.Activity
+	config.DB.First(&updated, "id = ?", id)
+	return c.JSON(updated)
+}
+
 func Submit(c fiber.Ctx) error {
 	regID, err := uuid.Parse(c.Params("regId"))
 	if err != nil {

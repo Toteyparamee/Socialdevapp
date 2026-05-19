@@ -19,7 +19,7 @@ class ProblemService extends ChangeNotifier {
 
   static const _timeout = Duration(seconds: 10);
 
-  String get _baseUrl => '${ApiConfig.problemUrl}/api/problems';
+  String get _baseUrl => ApiConfig.problemBase;
 
   Future<void> fetchProblems({String? category, String? status}) async {
     _isLoading = true;

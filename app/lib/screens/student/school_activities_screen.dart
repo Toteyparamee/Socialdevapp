@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../models/activity.dart';
 import '../../services/activity_service.dart';
+import '../../services/image_service.dart';
 
 class SchoolActivitiesScreen extends StatefulWidget {
   const SchoolActivitiesScreen({super.key});
@@ -161,6 +162,66 @@ String _formatThaiDate(DateTime dt) {
   return '${dt.day} ${months[dt.month - 1]} ${dt.year + 543}';
 }
 
+// ── Image loader via presign URL ──
+class _ActivityImage extends StatefulWidget {
+  final String imageId;
+  final double height;
+  final BorderRadius? borderRadius;
+
+  const _ActivityImage({required this.imageId, this.height = 140, this.borderRadius});
+
+  @override
+  State<_ActivityImage> createState() => _ActivityImageState();
+}
+
+class _ActivityImageState extends State<_ActivityImage> {
+  String? _url;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    try {
+      final url = context.read<ImageService>().getImageUrl(widget.imageId);
+      if (mounted) setState(() => _url = url);
+    } catch (e) {
+      if (mounted) setState(() => _error = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = Container(
+      height: widget.height,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.08),
+        borderRadius: widget.borderRadius,
+      ),
+      child: Center(
+        child: Icon(Icons.event_rounded, size: 48, color: AppTheme.primary.withValues(alpha: 0.4)),
+      ),
+    );
+
+    if (_error || _url == null) return placeholder;
+
+    return ClipRRect(
+      borderRadius: widget.borderRadius ?? BorderRadius.zero,
+      child: Image.network(
+        _url!,
+        height: widget.height,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => placeholder,
+      ),
+    );
+  }
+}
+
 // ── Activity Card ──
 class _ActivityCard extends StatelessWidget {
   final Activity activity;
@@ -192,18 +253,23 @@ class _ActivityCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Placeholder image
-            Container(
-              height: 140,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.08),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Center(
-                child: Icon(Icons.event_rounded, size: 48, color: AppTheme.primary.withValues(alpha: 0.4)),
-              ),
-            ),
+            activity.imageIds.isNotEmpty
+                ? _ActivityImage(
+                    imageId: activity.imageIds.first,
+                    height: 140,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  )
+                : Container(
+                    height: 140,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.08),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    ),
+                    child: Center(
+                      child: Icon(Icons.event_rounded, size: 48, color: AppTheme.primary.withValues(alpha: 0.4)),
+                    ),
+                  ),
             Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
@@ -318,12 +384,17 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
               ),
             ),
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                color: AppTheme.primary.withValues(alpha: 0.15),
-                child: Center(
-                  child: Icon(Icons.event_rounded, size: 64, color: AppTheme.primary.withValues(alpha: 0.4)),
-                ),
-              ),
+              background: activity.imageIds.isNotEmpty
+                  ? _ActivityImage(
+                      imageId: activity.imageIds.first,
+                      height: 220,
+                    )
+                  : Container(
+                      color: AppTheme.primary.withValues(alpha: 0.15),
+                      child: Center(
+                        child: Icon(Icons.event_rounded, size: 64, color: AppTheme.primary.withValues(alpha: 0.4)),
+                      ),
+                    ),
             ),
           ),
 

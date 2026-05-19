@@ -4,6 +4,7 @@ import '../../theme/app_theme.dart';
 import '../../models/activity.dart';
 import '../../services/auth_service.dart';
 import '../../services/activity_service.dart';
+import 'add_activity_screen.dart';
 
 class ReviewWorksScreen extends StatefulWidget {
   const ReviewWorksScreen({super.key});
@@ -192,6 +193,36 @@ class _ActivityCard extends StatelessWidget {
     required this.onRefresh,
   });
 
+  Future<void> _confirmDelete(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('ลบกิจกรรม'),
+        content: Text('ต้องการลบ "${item.activity.title}" ใช่หรือไม่?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ยกเลิก'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ลบ', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final success = await context.read<ActivityService>().deleteActivity(item.activity.id);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success ? 'ลบกิจกรรมแล้ว' : 'ลบไม่สำเร็จ'),
+        backgroundColor: success ? null : Colors.red,
+      ),
+    );
+    if (success) onRefresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final a = item.activity;
@@ -256,6 +287,32 @@ class _ActivityCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AddActivityScreen(editActivity: a),
+                        ),
+                      );
+                      onRefresh();
+                    },
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    color: AppTheme.primary,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    onPressed: () => _confirmDelete(context),
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    color: const Color(0xFFEF4444),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    visualDensity: VisualDensity.compact,
+                  ),
                 ],
               ),
               const SizedBox(height: 10),

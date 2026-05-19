@@ -431,7 +431,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
     try {
       // Upload to image service
-      final uri = Uri.parse('${ApiConfig.imageUrl}/api/images');
+      final uri = Uri.parse(ApiConfig.imageBase);
       final request = http.MultipartRequest('POST', uri);
       final auth = context.read<AuthService>();
       request.headers.addAll(auth.authHeaders);
@@ -878,7 +878,7 @@ class _ChatImageWidgetState extends State<_ChatImageWidget> {
     try {
       final auth = context.read<AuthService>();
       final resp = await http.get(
-        Uri.parse('${ApiConfig.imageUrl}/api/images/${widget.imageId}/url'),
+        Uri.parse('${ApiConfig.imageBase}/${widget.imageId}/url'),
         headers: auth.authHeaders,
       );
       if (resp.statusCode == 200) {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'api_config.dart';
 import 'auth_service.dart';
@@ -30,13 +31,13 @@ class ChatService extends ChangeNotifier {
 
   static const _timeout = Duration(seconds: 10);
 
-  String get _baseUrl => '${ApiConfig.chatUrl}/api/chat';
+  String get _baseUrl => ApiConfig.chatBase;
 
-  String get _wsUrl {
-    final httpUrl = ApiConfig.chatUrl;
-    final wsScheme = httpUrl.startsWith('https') ? 'wss' : 'ws';
-    final host = httpUrl.replaceFirst(RegExp(r'https?://'), '');
-    return '$wsScheme://$host/ws?token=${_auth.token}';
+  Uri get _wsUri {
+    final wsUrl = ApiConfig.gateway
+        .replaceFirst('https://', 'wss://')
+        .replaceFirst('http://', 'ws://');
+    return Uri.parse('$wsUrl/server/chat/ws?token=${Uri.encodeComponent(_auth.token!)}');
   }
 
   // ── WebSocket ──
@@ -47,9 +48,11 @@ class ChatService extends ChangeNotifier {
     if (_channel != null) return;
 
     try {
-      debugPrint('[ws] connecting to ${_wsUrl.split('?').first}...');
-      final uri = Uri.parse(_wsUrl);
-      _channel = WebSocketChannel.connect(uri);
+      final uri = _wsUri;
+      debugPrint(
+        '[ws] connecting to ${uri.replace(queryParameters: {}).toString()}...',
+      );
+      _channel = IOWebSocketChannel.connect(uri.toString());
 
       _channel!.stream.listen(
         _onWsData,
@@ -229,7 +232,9 @@ class ChatService extends ChangeNotifier {
         await fetchRooms();
         return ChatMessage.fromJson(data['message']);
       } else {
-        debugPrint('sendMessage failed: ${response.statusCode} ${response.body}');
+        debugPrint(
+          'sendMessage failed: ${response.statusCode} ${response.body}',
+        );
       }
     } catch (e) {
       debugPrint('sendMessage error: $e');

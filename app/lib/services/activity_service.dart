@@ -21,7 +21,7 @@ class ActivityService extends ChangeNotifier {
 
   static const _timeout = Duration(seconds: 10);
 
-  String get _baseUrl => '${ApiConfig.activityUrl}/api/activities';
+  String get _baseUrl => ApiConfig.activityBase;
 
   Future<void> fetchActivities() async {
     _isLoading = true;
@@ -29,7 +29,9 @@ class ActivityService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await http.get(Uri.parse(_baseUrl)).timeout(_timeout);
+      final response = await http
+          .get(Uri.parse(_baseUrl), headers: _auth.authHeaders)
+          .timeout(_timeout);
 
       if (response.statusCode == 200) {
         final list = jsonDecode(response.body) as List;
@@ -48,7 +50,7 @@ class ActivityService extends ChangeNotifier {
   Future<Activity?> getActivity(String id) async {
     try {
       final response = await http
-          .get(Uri.parse('$_baseUrl/$id'))
+          .get(Uri.parse('$_baseUrl/$id'), headers: _auth.authHeaders)
           .timeout(_timeout);
       if (response.statusCode == 200) {
         return Activity.fromJson(jsonDecode(response.body));
@@ -124,6 +126,68 @@ class ActivityService extends ChangeNotifier {
       debugPrint('fetchMyRegistrations error: $e');
     }
     notifyListeners();
+  }
+
+  Future<bool> deleteActivity(String activityId) async {
+    try {
+      final response = await http
+          .delete(
+            Uri.parse('$_baseUrl/$activityId'),
+            headers: _auth.authHeaders,
+          )
+          .timeout(_timeout);
+      if (response.statusCode == 200) {
+        _activities.removeWhere((a) => a.id == activityId);
+        notifyListeners();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> updateActivity({
+    required String id,
+    required String title,
+    required String description,
+    required String location,
+    double? latitude,
+    double? longitude,
+    String supervisor = '',
+    String supervisorPhone = '',
+    required DateTime startAt,
+    required DateTime endAt,
+    required int maxSlots,
+    List<String> imageIds = const [],
+  }) async {
+    try {
+      final body = {
+        'title': title,
+        'description': description,
+        'location': location,
+        'start_at': startAt.toUtc().toIso8601String(),
+        'end_at': endAt.toUtc().toIso8601String(),
+        'max_slots': maxSlots,
+        'image_ids': imageIds,
+      };
+      if (latitude != null) body['latitude'] = latitude;
+      if (longitude != null) body['longitude'] = longitude;
+      if (supervisor.isNotEmpty) body['supervisor'] = supervisor;
+      if (supervisorPhone.isNotEmpty) body['supervisor_phone'] = supervisorPhone;
+
+      final response = await http
+          .put(
+            Uri.parse('$_baseUrl/$id'),
+            headers: _auth.authHeaders,
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        await fetchActivities();
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   Future<bool> registerForActivity(String activityId) async {

@@ -13,9 +13,11 @@ spec:
       labels:
         app: notification
     spec:
+      imagePullSecrets:
+        - name: gitlab-registry
       containers:
         - name: notification
-          image: socialdevapp-notification:latest
+          image: registry.kpinnovative.co.th/paramee/server_socialdev/notification:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8086

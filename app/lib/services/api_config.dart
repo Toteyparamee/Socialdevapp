@@ -1,19 +1,10 @@
-import 'dart:io' show Platform;
-
 class ApiConfig {
   ApiConfig._();
-
-  static final String _host =
-      Platform.isAndroid ? '10.0.2.2' : 'localhost';
-
-  /// Kong gateway port (NodePort 30000)
-  static const int _kongPort = 30000;
-
-  static String get gateway => 'http://$_host:$_kongPort';
+  static const String gateway = 'https://socialdev.parameedev.online';
 
   static String get loginUrl => gateway;
-  static String get imageUrl => gateway;
-  static String get problemUrl => gateway;
-  static String get activityUrl => gateway;
-  static String get chatUrl => gateway;
+  static String get activityBase => '$gateway/server/activity/api/activities';
+  static String get imageBase => '$gateway/server/image/api/images';
+  static String get problemBase => '$gateway/server/problem/api/problems';
+  static String get chatBase => '$gateway/server/chat/api/chat';
 }

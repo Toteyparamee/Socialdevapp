@@ -18,6 +18,8 @@ func Setup(app *fiber.App) {
 	api.Get("/my-submissions", handlers.MyActivitySubmissions)
 	api.Get("/:id", handlers.GetActivity)
 	api.Post("/", handlers.CreateActivity)
+	api.Put("/:id", handlers.UpdateActivity)
+	api.Delete("/:id", handlers.DeleteActivity)
 	api.Post("/:id/register", handlers.Register)
 	api.Delete("/registrations/:regId", handlers.Unregister)
 	api.Post("/registrations/:regId/submit", handlers.Submit)

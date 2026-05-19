@@ -50,6 +50,19 @@ func Upload(ctx context.Context, fh *multipart.FileHeader, folder string) (*Uplo
 	}, nil
 }
 
+func Download(ctx context.Context, key string) (*minio.Object, string, error) {
+	obj, err := config.Client.GetObject(ctx, config.Bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, "", err
+	}
+	info, err := obj.Stat()
+	if err != nil {
+		obj.Close()
+		return nil, "", err
+	}
+	return obj, info.ContentType, nil
+}
+
 func Delete(ctx context.Context, key string) error {
 	return config.Client.RemoveObject(ctx, config.Bucket, key, minio.RemoveObjectOptions{})
 }
@@ -58,6 +71,20 @@ func Presign(ctx context.Context, key string, ttl time.Duration) (string, error)
 	u, err := config.Client.PresignedGetObject(ctx, config.Bucket, key, ttl, url.Values{})
 	if err != nil {
 		return "", err
+	}
+	// MinIO signs with internal host — rewrite to public host keeping signature intact.
+	// This works because MINIO_SERVER_URL tells MinIO to sign with the public host,
+	// so the signature remains valid after the rewrite.
+	publicBase := getEnv("MINIO_PUBLIC_URL", "")
+	if publicBase != "" {
+		pub, err := url.Parse(publicBase)
+		if err == nil {
+			u.Scheme = pub.Scheme
+			u.Host = pub.Host
+			// pub.Path is e.g. "/storage", key is "activity/file.jpg"
+			// MinIO path is "/<bucket>/<key>", rewrite to "<pubPath>/<key>"
+			u.Path = pub.Path + "/" + config.Bucket + "/" + key
+		}
 	}
 	return u.String(), nil
 }
