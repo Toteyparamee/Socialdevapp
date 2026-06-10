@@ -1,0 +1,148 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  REGISTRY: registry.kpinnovative.co.th/paramee/server_socialdevapp
+  KUBECONFIG: /root/.kube/config
+
+# ─── shared Dockerfile ────────────────────────────────────────────────────────
+# All services share server/Dockerfile with --build-arg SERVICE=<name>.
+# Build context is server/ so the `replace ../shared` directive resolves.
+
+.build_service:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  tags:
+    - runner-develop
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(echo -n $CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD | base64)\"}}}" > /kaniko/.docker/config.json
+  script:
+    - /kaniko/executor
+      --context ./server
+      --dockerfile Dockerfile
+      --build-arg SERVICE=$SERVICE_DIR
+      --destination $REGISTRY/$SERVICE_NAME:latest
+      --destination $REGISTRY/$SERVICE_NAME:$CI_COMMIT_SHORT_SHA
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+      changes:
+        - server/$SERVICE_DIR/**/*
+        - server/shared/**/*
+        - server/Dockerfile
+
+.deploy_service:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  tags:
+    - runner-develop
+  script:
+    - kubectl rollout restart deployment/$SERVICE_NAME -n socialdevapp
+    - kubectl rollout status deployment/$SERVICE_NAME -n socialdevapp --timeout=120s
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+      changes:
+        - server/$SERVICE_DIR/**/*
+        - server/shared/**/*
+        - server/Dockerfile
+
+# ─── activity ─────────────────────────────────────────────────────────────────
+build:activity:
+  extends: .build_service
+  variables:
+    SERVICE_NAME: activity-service
+    SERVICE_DIR: activity
+
+deploy:activity:
+  extends: .deploy_service
+  needs: [build:activity]
+  variables:
+    SERVICE_NAME: activity-service
+    SERVICE_DIR: activity
+
+# ─── analytics ────────────────────────────────────────────────────────────────
+build:analytics:
+  extends: .build_service
+  variables:
+    SERVICE_NAME: analytics-service
+    SERVICE_DIR: analytics
+
+deploy:analytics:
+  extends: .deploy_service
+  needs: [build:analytics]
+  variables:
+    SERVICE_NAME: analytics-service
+    SERVICE_DIR: analytics
+
+# ─── chat ─────────────────────────────────────────────────────────────────────
+build:chat:
+  extends: .build_service
+  variables:
+    SERVICE_NAME: chat-service
+    SERVICE_DIR: chat
+
+deploy:chat:
+  extends: .deploy_service
+  needs: [build:chat]
+  variables:
+    SERVICE_NAME: chat-service
+    SERVICE_DIR: chat
+
+# ─── image ────────────────────────────────────────────────────────────────────
+build:image:
+  extends: .build_service
+  variables:
+    SERVICE_NAME: image-service
+    SERVICE_DIR: image
+
+deploy:image:
+  extends: .deploy_service
+  needs: [build:image]
+  variables:
+    SERVICE_NAME: image-service
+    SERVICE_DIR: image
+
+# ─── login ────────────────────────────────────────────────────────────────────
+build:login:
+  extends: .build_service
+  variables:
+    SERVICE_NAME: login-service
+    SERVICE_DIR: login
+
+deploy:login:
+  extends: .deploy_service
+  needs: [build:login]
+  variables:
+    SERVICE_NAME: login-service
+    SERVICE_DIR: login
+
+# ─── notification ─────────────────────────────────────────────────────────────
+build:notification:
+  extends: .build_service
+  variables:
+    SERVICE_NAME: notification-service
+    SERVICE_DIR: notification
+
+deploy:notification:
+  extends: .deploy_service
+  needs: [build:notification]
+  variables:
+    SERVICE_NAME: notification-service
+    SERVICE_DIR: notification
+
+# ─── problem ──────────────────────────────────────────────────────────────────
+build:problem:
+  extends: .build_service
+  variables:
+    SERVICE_NAME: problem-service
+    SERVICE_DIR: problem
+
+deploy:problem:
+  extends: .deploy_service
+  needs: [build:problem]
+  variables:
+    SERVICE_NAME: problem-service
+    SERVICE_DIR: problem
