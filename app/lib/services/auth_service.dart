@@ -14,6 +14,7 @@ class AuthService extends ChangeNotifier {
   static const _keyToken = 'jwt_token';
   static const _keyAvatarUrl = 'avatar_url';
   static const _keyUserId = 'user_id';
+  static const _keySchoolId = 'school_id';
 
   // ── Config ──
   static String get _baseUrl => ApiConfig.loginUrl;
@@ -29,6 +30,7 @@ class AuthService extends ChangeNotifier {
   String? _token;
   String? _avatarUrl;
   String? _userId;
+  String? _schoolId;
   bool _isLoading = true;
 
   bool get isLoggedIn => _isLoggedIn;
@@ -37,6 +39,7 @@ class AuthService extends ChangeNotifier {
   String? get token => _token;
   String? get avatarUrl => _avatarUrl;
   String? get userId => _userId;
+  String? get schoolId => _schoolId;
   bool get isLoading => _isLoading;
 
   AuthService() {
@@ -51,6 +54,7 @@ class AuthService extends ChangeNotifier {
     _token = prefs.getString(_keyToken);
     _avatarUrl = prefs.getString(_keyAvatarUrl);
     _userId = prefs.getString(_keyUserId);
+    _schoolId = prefs.getString(_keySchoolId);
     _isLoading = false;
     notifyListeners();
   }
@@ -61,18 +65,16 @@ class AuthService extends ChangeNotifier {
     required String token,
     String? avatarUrl,
     String? userId,
+    String? schoolId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyIsLoggedIn, true);
     await prefs.setString(_keyUsername, username);
     await prefs.setString(_keyRole, role);
     await prefs.setString(_keyToken, token);
-    if (avatarUrl != null) {
-      await prefs.setString(_keyAvatarUrl, avatarUrl);
-    }
-    if (userId != null) {
-      await prefs.setString(_keyUserId, userId);
-    }
+    if (avatarUrl != null) await prefs.setString(_keyAvatarUrl, avatarUrl);
+    if (userId != null) await prefs.setString(_keyUserId, userId);
+    if (schoolId != null) await prefs.setString(_keySchoolId, schoolId);
 
     _isLoggedIn = true;
     _username = username;
@@ -80,6 +82,7 @@ class AuthService extends ChangeNotifier {
     _token = token;
     _avatarUrl = avatarUrl;
     _userId = userId;
+    _schoolId = schoolId;
     notifyListeners();
   }
 
@@ -107,6 +110,7 @@ class AuthService extends ChangeNotifier {
         token: data['token'],
         avatarUrl: data['user']['avatar_url'],
         userId: data['user']['id']?.toString(),
+        schoolId: data['user']['school_id']?.toString(),
       );
     } else {
       final data = jsonDecode(response.body);
@@ -120,6 +124,7 @@ class AuthService extends ChangeNotifier {
     required String email,
     required String password,
     required String role,
+    String schoolId = '',
   }) async {
     final response = await http
         .post(
@@ -130,6 +135,7 @@ class AuthService extends ChangeNotifier {
             'email': email,
             'password': password,
             'role': role,
+            'school_id': schoolId,
           }),
         )
         .timeout(_timeout);
@@ -141,6 +147,7 @@ class AuthService extends ChangeNotifier {
         role: data['user']['role'],
         token: data['token'],
         userId: data['user']['id']?.toString(),
+        schoolId: data['user']['school_id']?.toString(),
       );
     } else {
       final data = jsonDecode(response.body);
@@ -194,6 +201,7 @@ class AuthService extends ChangeNotifier {
         token: data['token'],
         avatarUrl: data['user']['avatar_url'],
         userId: data['user']['id']?.toString(),
+        schoolId: data['user']['school_id']?.toString(),
       );
     } else {
       final data = jsonDecode(response.body);
@@ -212,6 +220,7 @@ class AuthService extends ChangeNotifier {
     _token = null;
     _avatarUrl = null;
     _userId = null;
+    _schoolId = null;
     notifyListeners();
   }
 

@@ -1,6 +1,7 @@
 class Activity {
   final String id;
   final String teacherId;
+  final String schoolId;
   final String title;
   final String description;
   final String location;
@@ -18,6 +19,7 @@ class Activity {
   Activity({
     required this.id,
     required this.teacherId,
+    this.schoolId = '',
     required this.title,
     required this.description,
     required this.location,
@@ -37,6 +39,7 @@ class Activity {
     return Activity(
       id: json['id'] ?? '',
       teacherId: json['teacher_id'] ?? '',
+      schoolId: json['school_id'] ?? '',
       title: json['title'] ?? '',
       description: json['description'] ?? '',
       location: json['location'] ?? '',

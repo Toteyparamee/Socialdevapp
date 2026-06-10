@@ -17,7 +17,7 @@ spec:
         - name: gitlab-registry
       containers:
         - name: notification
-          image: registry.kpinnovative.co.th/paramee/server_socialdev/notification:latest
+          image: registry.kpinnovative.co.th/paramee/server_socialdevapp/notification-service:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8086

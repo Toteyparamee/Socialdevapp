@@ -6,8 +6,11 @@ import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../models/problem_report.dart';
+import '../models/activity.dart';
 import '../services/problem_service.dart';
+import '../services/activity_service.dart';
 import '../widgets/problem_bottom_sheet.dart';
+import '../widgets/activity_bottom_sheet.dart';
 import '../widgets/filter_panel.dart';
 
 import 'problem_detail_screen.dart';
@@ -23,9 +26,11 @@ class _MapHomeScreenState extends State<MapHomeScreen>
     with TickerProviderStateMixin {
   GoogleMapController? _mapController;
   ProblemReport? _selectedProblem;
-  final Set<ProblemCategory> _activeFilters = ProblemCategory.values.toSet();
+  Activity? _selectedActivity;
+  MapFilter _mapFilter = const MapFilter();
   final _searchController = TextEditingController();
   final Map<String, BitmapDescriptor> _customIcons = {};
+  final Map<String, BitmapDescriptor> _activityIcons = {};
 
   late AnimationController _sheetController;
   late Animation<double> _sheetAnimation;
@@ -47,10 +52,12 @@ class _MapHomeScreenState extends State<MapHomeScreen>
       curve: Curves.easeOutCubic,
     );
     _goToMyLocation();
-    // โหลดข้อมูลจาก API
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ProblemService>().fetchProblems().then((_) {
         _buildCustomMarkers();
+      });
+      context.read<ActivityService>().fetchActivities().then((_) {
+        _buildActivityMarkers();
       });
     });
   }
@@ -84,19 +91,39 @@ class _MapHomeScreenState extends State<MapHomeScreen>
   }
 
   List<ProblemReport> get _filteredProblems {
-    final problems = context.read<ProblemService>().problems;
-    return problems.where((p) => _activeFilters.contains(p.category)).toList();
+    if (!_mapFilter.showProblems) return [];
+    return context.read<ProblemService>().problems;
+  }
+
+  List<Activity> get _activitiesWithLocation {
+    if (!_mapFilter.showActivities) return [];
+    return context
+        .read<ActivityService>()
+        .activities
+        .where((a) => a.latitude != null && a.longitude != null)
+        .toList();
   }
 
   Set<Marker> get _markers {
-    return _filteredProblems.map((p) {
+    final problemMarkers = _filteredProblems.map((p) {
       return Marker(
-        markerId: MarkerId(p.id),
+        markerId: MarkerId('problem_${p.id}'),
         position: p.location,
         icon: _customIcons[p.id] ?? BitmapDescriptor.defaultMarker,
         onTap: () => _selectProblem(p),
       );
-    }).toSet();
+    });
+
+    final activityMarkers = _activitiesWithLocation.map((a) {
+      return Marker(
+        markerId: MarkerId('activity_${a.id}'),
+        position: LatLng(a.latitude!, a.longitude!),
+        icon: _activityIcons[a.id] ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+        onTap: () => _selectActivity(a),
+      );
+    });
+
+    return {...problemMarkers, ...activityMarkers};
   }
 
   IconData _categoryIcon(ProblemCategory category) {
@@ -321,17 +348,50 @@ class _MapHomeScreenState extends State<MapHomeScreen>
     return BitmapDescriptor.bytes(byteData!.buffer.asUint8List());
   }
 
+  Future<void> _buildActivityMarkers() async {
+    const activityColor = Color(0xFF6C63FF);
+    for (final a in _activitiesWithLocation) {
+      if (_activityIcons.containsKey(a.id)) continue;
+      final icon = await _createCustomMarker(
+        label: a.title,
+        iconData: Icons.school_rounded,
+        color: activityColor,
+      );
+      _activityIcons[a.id] = icon;
+    }
+    if (mounted) setState(() {});
+  }
+
   void _selectProblem(ProblemReport problem) {
-    setState(() => _selectedProblem = problem);
+    setState(() {
+      _selectedProblem = problem;
+      _selectedActivity = null;
+    });
     _sheetController.forward(from: 0);
     _mapController?.animateCamera(
       CameraUpdate.newLatLng(problem.location),
     );
   }
 
+  void _selectActivity(Activity activity) {
+    setState(() {
+      _selectedActivity = activity;
+      _selectedProblem = null;
+    });
+    _sheetController.forward(from: 0);
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLng(LatLng(activity.latitude!, activity.longitude!)),
+    );
+  }
+
   void _clearSelection() {
     _sheetController.reverse().then((_) {
-      if (mounted) setState(() => _selectedProblem = null);
+      if (mounted) {
+        setState(() {
+          _selectedProblem = null;
+          _selectedActivity = null;
+        });
+      }
     });
   }
 
@@ -358,14 +418,9 @@ class _MapHomeScreenState extends State<MapHomeScreen>
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => FilterPanel(
-        activeFilters: _activeFilters,
-        onChanged: (filters) {
-          setState(() {
-            _activeFilters
-              ..clear()
-              ..addAll(filters);
-          });
-          _buildCustomMarkers();
+        current: _mapFilter,
+        onChanged: (filter) {
+          setState(() => _mapFilter = filter);
           Navigator.pop(context);
         },
       ),
@@ -374,8 +429,8 @@ class _MapHomeScreenState extends State<MapHomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    // watch เพื่อ rebuild เมื่อข้อมูลเปลี่ยน
     context.watch<ProblemService>();
+    context.watch<ActivityService>();
 
     return Scaffold(
       body: Stack(
@@ -399,7 +454,7 @@ class _MapHomeScreenState extends State<MapHomeScreen>
           // Map controls (zoom + my location)
           Positioned(
             right: 16,
-            bottom: _selectedProblem != null ? 220 : 100,
+            bottom: (_selectedProblem != null || _selectedActivity != null) ? 220 : 100,
             child: Column(
               children: [
                 _buildMapButton(
@@ -420,7 +475,7 @@ class _MapHomeScreenState extends State<MapHomeScreen>
             ),
           ),
 
-          // Bottom sheet
+          // Bottom sheet — problem
           if (_selectedProblem != null)
             Positioned(
               left: 0,
@@ -434,6 +489,24 @@ class _MapHomeScreenState extends State<MapHomeScreen>
                 child: ProblemBottomSheet(
                   problem: _selectedProblem!,
                   onExpand: () => _openDetail(_selectedProblem!),
+                ),
+              ),
+            ),
+
+          // Bottom sheet — activity
+          if (_selectedActivity != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(_sheetAnimation),
+                child: ActivityBottomSheet(
+                  activity: _selectedActivity!,
+                  onExpand: () {},
                 ),
               ),
             ),
@@ -508,7 +581,7 @@ class _MapHomeScreenState extends State<MapHomeScreen>
                     children: [
                       const Icon(Icons.tune_rounded,
                           color: AppTheme.textPrimary, size: 22),
-                      if (_activeFilters.length < ProblemCategory.values.length)
+                      if (!_mapFilter.showProblems || !_mapFilter.showActivities)
                         Positioned(
                           top: 8,
                           right: 8,

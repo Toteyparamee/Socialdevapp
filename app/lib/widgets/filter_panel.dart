@@ -1,14 +1,30 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../models/problem_report.dart';
+
+class MapFilter {
+  final bool showProblems;
+  final bool showActivities;
+
+  const MapFilter({
+    this.showProblems = true,
+    this.showActivities = true,
+  });
+
+  MapFilter copyWith({bool? showProblems, bool? showActivities}) {
+    return MapFilter(
+      showProblems: showProblems ?? this.showProblems,
+      showActivities: showActivities ?? this.showActivities,
+    );
+  }
+}
 
 class FilterPanel extends StatefulWidget {
-  final Set<ProblemCategory> activeFilters;
-  final ValueChanged<Set<ProblemCategory>> onChanged;
+  final MapFilter current;
+  final ValueChanged<MapFilter> onChanged;
 
   const FilterPanel({
     super.key,
-    required this.activeFilters,
+    required this.current,
     required this.onChanged,
   });
 
@@ -17,12 +33,12 @@ class FilterPanel extends StatefulWidget {
 }
 
 class _FilterPanelState extends State<FilterPanel> {
-  late Set<ProblemCategory> _selected;
+  late MapFilter _filter;
 
   @override
   void initState() {
     super.initState();
-    _selected = Set.from(widget.activeFilters);
+    _filter = widget.current;
   }
 
   @override
@@ -33,11 +49,10 @@ class _FilterPanelState extends State<FilterPanel> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: AppTheme.cardShadow,
       ),
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
           Container(
             width: 36,
             height: 4,
@@ -47,124 +62,108 @@ class _FilterPanelState extends State<FilterPanel> {
             ),
           ),
           const SizedBox(height: 20),
-          // Title
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'กรองประเภทปัญหา',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
-                ),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'แสดงบนแผนที่',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
               ),
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    if (_selected.length == ProblemCategory.values.length) {
-                      _selected.clear();
-                    } else {
-                      _selected = ProblemCategory.values.toSet();
-                    }
-                  });
-                },
-                child: Text(
-                  _selected.length == ProblemCategory.values.length
-                      ? 'ยกเลิกทั้งหมด'
-                      : 'เลือกทั้งหมด',
-                  style: const TextStyle(
-                    color: AppTheme.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildToggleTile(
+            icon: Icons.report_problem_outlined,
+            color: Colors.red.shade600,
+            label: 'ปัญหาในชุมชน',
+            subtitle: 'แสดง marker ปัญหาทั่วไป',
+            value: _filter.showProblems,
+            onChanged: (v) => setState(() => _filter = _filter.copyWith(showProblems: v)),
           ),
           const SizedBox(height: 12),
-          // Filter chips
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: ProblemCategory.values.map((cat) {
-              final isActive = _selected.contains(cat);
-              final label = switch (cat) {
-                ProblemCategory.flood => 'น้ำท่วม',
-                ProblemCategory.trash => 'ขยะ',
-                ProblemCategory.traffic => 'การจราจร',
-                ProblemCategory.infrastructure => 'โครงสร้างพื้นฐาน',
-                ProblemCategory.other => 'อื่นๆ',
-              };
-              final icon = switch (cat) {
-                ProblemCategory.flood => Icons.water_drop_outlined,
-                ProblemCategory.trash => Icons.delete_outline,
-                ProblemCategory.traffic => Icons.traffic_outlined,
-                ProblemCategory.infrastructure => Icons.construction_outlined,
-                ProblemCategory.other => Icons.more_horiz,
-              };
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    if (isActive) {
-                      _selected.remove(cat);
-                    } else {
-                      _selected.add(cat);
-                    }
-                  });
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? AppTheme.primary.withValues(alpha: 0.1)
-                        : AppTheme.inputBg,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: isActive ? AppTheme.primary : Colors.transparent,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        icon,
-                        size: 18,
-                        color: isActive
-                            ? AppTheme.primary
-                            : AppTheme.textSecondary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight:
-                              isActive ? FontWeight.w600 : FontWeight.w400,
-                          color: isActive
-                              ? AppTheme.primary
-                              : AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
+          _buildToggleTile(
+            icon: Icons.school_rounded,
+            color: const Color(0xFF6C63FF),
+            label: 'กิจกรรมโรงเรียน',
+            subtitle: 'แสดง marker กิจกรรมของโรงเรียน',
+            value: _filter.showActivities,
+            onChanged: (v) => setState(() => _filter = _filter.copyWith(showActivities: v)),
           ),
           const SizedBox(height: 24),
-          // Apply button
           SizedBox(
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: () => widget.onChanged(_selected),
+              onPressed: () => widget.onChanged(_filter),
               child: const Text('ใช้ตัวกรอง'),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildToggleTile({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: value ? color.withValues(alpha: 0.06) : AppTheme.inputBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: value ? color.withValues(alpha: 0.4) : Colors.transparent,
+          width: 1.5,
+        ),
+      ),
+      child: SwitchListTile(
+        value: value,
+        onChanged: onChanged,
+        activeThumbColor: color,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: value ? AppTheme.textPrimary : AppTheme.textSecondary,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            ),
+          ],
+        ),
       ),
     );
   }

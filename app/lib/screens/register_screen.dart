@@ -112,6 +112,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         email: _usernameController.text.trim(),
         password: _passwordController.text,
         role: _roleName,
+        schoolId: _schoolController.text.trim(),
       );
 
       if (!mounted) return;

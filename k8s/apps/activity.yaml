@@ -21,7 +21,7 @@ spec:
           command: ["sh", "-c", "until nc -z 10.194.1.43 5432; do sleep 2; done"]
       containers:
         - name: activity
-          image: registry.kpinnovative.co.th/paramee/server_socialdev/activity:latest
+          image: registry.kpinnovative.co.th/paramee/server_socialdevapp/activity-service:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8084

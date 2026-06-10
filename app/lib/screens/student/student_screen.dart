@@ -195,6 +195,7 @@ class _HomeTabState extends State<_HomeTab> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
+    context.watch<ActivityService>();
 
     return Scaffold(
       backgroundColor: AppTheme.inputBg,
@@ -212,11 +213,12 @@ class _HomeTabState extends State<_HomeTab> {
                     CircleAvatar(
                       radius: 24,
                       backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                      child: const Icon(
-                        Icons.person,
-                        color: AppTheme.primary,
-                        size: 26,
-                      ),
+                      backgroundImage: auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty
+                          ? NetworkImage(auth.avatarUrl!)
+                          : null,
+                      child: auth.avatarUrl == null || auth.avatarUrl!.isEmpty
+                          ? const Icon(Icons.person, color: AppTheme.primary, size: 26)
+                          : null,
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -672,34 +674,43 @@ class _HomeTabState extends State<_HomeTab> {
   ];
   static const _dayHeaders = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
 
-  // ข้อมูลกิจกรรมที่กำลังมาถึง
-  static final _upcomingEvents = [
-    _UpcomingEvent(
-      title: 'กิจกรรมจิตอาสาพัฒนาชุมชน',
-      subtitle: 'สำนักงานเขตพื้นที่การศึกษา',
-      eventDate: DateTime(2026, 4, 15),
-      status: 'รอดำเนินการ',
-      color: const Color(0xFFFBBF24),
-    ),
-    _UpcomingEvent(
-      title: 'แข่งขันกีฬาสีประจำปี',
-      subtitle: 'ฝ่ายกิจกรรมนักเรียน',
-      eventDate: DateTime(2026, 4, 20),
-      status: 'อนุมัติแล้ว',
-      color: const Color(0xFF10B981),
-    ),
-    _UpcomingEvent(
-      title: 'ค่ายภาษาอังกฤษ English Camp',
-      subtitle: 'กลุ่มสาระภาษาต่างประเทศ',
-      eventDate: DateTime(2026, 5, 10),
-      status: 'รอส่งงาน',
-      color: const Color(0xFF3B82F6),
-    ),
-  ];
+  List<Activity> get _upcomingActivities {
+    final list = List<Activity>.from(context.read<ActivityService>().activities)
+      ..sort((a, b) => a.startAt.compareTo(b.startAt));
+    return list;
+  }
+
+  _UpcomingEvent _activityToEvent(Activity a) {
+    final now = DateTime.now();
+    final diff = a.startAt.difference(now);
+    final Color color;
+    final String status;
+    if (diff.isNegative) {
+      color = Colors.grey;
+      status = 'ผ่านไปแล้ว';
+    } else if (diff.inDays <= 3) {
+      color = const Color(0xFFEF4444);
+      status = 'ใกล้ถึงแล้ว';
+    } else if (diff.inDays <= 7) {
+      color = const Color(0xFFFBBF24);
+      status = 'อีก ${diff.inDays} วัน';
+    } else {
+      color = const Color(0xFF10B981);
+      status = 'อีก ${diff.inDays} วัน';
+    }
+    return _UpcomingEvent(
+      title: a.title,
+      subtitle: a.location,
+      eventDate: a.startAt,
+      status: status,
+      color: color,
+    );
+  }
 
   List<_UpcomingEvent> get _filteredEvents {
-    if (_selectedDate == null) return _upcomingEvents;
-    return _upcomingEvents
+    final events = _upcomingActivities.map(_activityToEvent).toList();
+    if (_selectedDate == null) return events;
+    return events
         .where(
           (e) =>
               e.eventDate.year == _selectedDate!.year &&
@@ -711,9 +722,9 @@ class _HomeTabState extends State<_HomeTab> {
 
   Set<int> _eventDaysInMonth(DateTime month) {
     final days = <int>{};
-    for (final e in _upcomingEvents) {
-      if (e.eventDate.year == month.year && e.eventDate.month == month.month) {
-        days.add(e.eventDate.day);
+    for (final a in context.read<ActivityService>().activities) {
+      if (a.startAt.year == month.year && a.startAt.month == month.month) {
+        days.add(a.startAt.day);
       }
     }
     return days;
@@ -969,11 +980,12 @@ class _ProfileTab extends StatelessWidget {
             child: CircleAvatar(
               radius: 44,
               backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
-              child: const Icon(
-                Icons.person,
-                size: 44,
-                color: AppTheme.primary,
-              ),
+              backgroundImage: auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty
+                  ? NetworkImage(auth.avatarUrl!)
+                  : null,
+              child: auth.avatarUrl == null || auth.avatarUrl!.isEmpty
+                  ? const Icon(Icons.person, size: 44, color: AppTheme.primary)
+                  : null,
             ),
           ),
           const SizedBox(height: 16),

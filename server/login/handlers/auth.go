@@ -25,6 +25,7 @@ type RegisterRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Role     string `json:"role"`
+	SchoolID string `json:"school_id"`
 }
 
 type LoginRequest struct {
@@ -78,6 +79,7 @@ func Register(c fiber.Ctx) error {
 		Password: string(hash),
 		Role:     role,
 		Provider: "local",
+		SchoolID: req.SchoolID,
 	}
 
 	if result := config.DB.Create(&user); result.Error != nil {
@@ -180,12 +182,15 @@ func GoogleLogin(c fiber.Ctx) error {
 		})
 	} else {
 		// อัพเดทข้อมูลจาก Google
-		config.DB.Model(&user).Updates(models.User{
-			AvatarURL: userInfo.Picture,
-			GoogleID:  userInfo.Sub,
+		config.DB.Model(&user).Updates(map[string]interface{}{
+			"avatar_url": userInfo.Picture,
+			"google_id":  userInfo.Sub,
 		})
+		// reload เพื่อให้ได้ค่า avatar_url ล่าสุด
+		config.DB.First(&user, user.ID)
 	}
 
+	log.Printf("[GoogleLogin] user_id=%d avatar_url=%q", user.ID, user.AvatarURL)
 	token, err := generateJWT(user)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to generate token"})
@@ -198,12 +203,13 @@ func GoogleLogin(c fiber.Ctx) error {
 
 func generateJWT(user models.User) (string, error) {
 	claims := jwt.MapClaims{
-		"user_id":  user.ID,
-		"username": user.Username,
-		"email":    user.Email,
-		"role":     user.Role,
-		"exp":      time.Now().Add(72 * time.Hour).Unix(),
-		"iat":      time.Now().Unix(),
+		"user_id":   user.ID,
+		"username":  user.Username,
+		"email":     user.Email,
+		"role":      user.Role,
+		"school_id": user.SchoolID,
+		"exp":       time.Now().Add(72 * time.Hour).Unix(),
+		"iat":       time.Now().Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

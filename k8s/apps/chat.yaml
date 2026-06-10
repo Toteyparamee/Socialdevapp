@@ -21,7 +21,7 @@ spec:
           command: ["sh", "-c", "until nc -z 10.194.1.43 5432; do sleep 2; done"]
       containers:
         - name: chat
-          image: registry.kpinnovative.co.th/paramee/server_socialdev/chat:latest
+          image: registry.kpinnovative.co.th/paramee/server_socialdevapp/chat-service:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8085

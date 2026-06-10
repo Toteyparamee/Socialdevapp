@@ -15,6 +15,7 @@ type User struct {
 	Provider  string         `gorm:"size:20;default:local" json:"provider"` // local | google
 	GoogleID  string         `gorm:"size:255" json:"-"`
 	AvatarURL string         `gorm:"size:500" json:"avatar_url"`
+	SchoolID  string         `gorm:"size:100;default:''" json:"school_id"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

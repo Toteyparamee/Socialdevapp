@@ -14,8 +14,13 @@ import (
 )
 
 func ListActivities(c fiber.Ctx) error {
+	schoolID, _ := c.Locals("school_id").(string)
 	var items []models.Activity
-	if err := config.DB.Order("start_at asc").Find(&items).Error; err != nil {
+	q := config.DB.Order("start_at asc")
+	if schoolID != "" {
+		q = q.Where("school_id = ?", schoolID)
+	}
+	if err := q.Find(&items).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.JSON(items)
@@ -41,7 +46,10 @@ func CreateActivity(c fiber.Ctx) error {
 	if uid, ok := c.Locals("user_id").(string); ok {
 		a.TeacherID = uid
 	}
-	log.Printf("[CreateActivity] teacher_id=%q raw_local=%v", a.TeacherID, c.Locals("user_id"))
+	if sid, ok := c.Locals("school_id").(string); ok {
+		a.SchoolID = sid
+	}
+	log.Printf("[CreateActivity] teacher_id=%q school_id=%q", a.TeacherID, a.SchoolID)
 	if err := config.DB.Create(&a).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}

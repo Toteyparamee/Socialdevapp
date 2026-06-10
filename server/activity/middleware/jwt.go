@@ -37,5 +37,8 @@ func JWTProtect(c fiber.Ctx) error {
 	if role, ok := claims["role"]; ok {
 		c.Locals("role", role)
 	}
+	if schoolID, ok := claims["school_id"]; ok {
+		c.Locals("school_id", schoolID)
+	}
 	return c.Next()
 }

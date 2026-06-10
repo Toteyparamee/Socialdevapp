@@ -213,11 +213,12 @@ class _HomeTabState extends State<_HomeTab> {
                     CircleAvatar(
                       radius: 24,
                       backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                      child: const Icon(
-                        Icons.school_rounded,
-                        color: AppTheme.primary,
-                        size: 26,
-                      ),
+                      backgroundImage: auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty
+                          ? NetworkImage(auth.avatarUrl!)
+                          : null,
+                      child: auth.avatarUrl == null || auth.avatarUrl!.isEmpty
+                          ? const Icon(Icons.school_rounded, color: AppTheme.primary, size: 26)
+                          : null,
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -936,11 +937,12 @@ class _ProfileTab extends StatelessWidget {
             child: CircleAvatar(
               radius: 44,
               backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
-              child: const Icon(
-                Icons.school_rounded,
-                size: 44,
-                color: AppTheme.primary,
-              ),
+              backgroundImage: auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty
+                  ? NetworkImage(auth.avatarUrl!)
+                  : null,
+              child: auth.avatarUrl == null || auth.avatarUrl!.isEmpty
+                  ? const Icon(Icons.school_rounded, size: 44, color: AppTheme.primary)
+                  : null,
             ),
           ),
           const SizedBox(height: 16),
