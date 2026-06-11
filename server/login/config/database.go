@@ -30,7 +30,10 @@ func ConnectDatabase() {
 	DB = db
 
 	if err := db.AutoMigrate(&models.User{}); err != nil {
-		log.Printf("auto-migrate warning: %v", err)
+		log.Printf("auto-migrate users warning: %v", err)
+	}
+	if err := db.AutoMigrate(&models.School{}); err != nil {
+		log.Printf("auto-migrate schools warning: %v", err)
 	}
 
 	log.Println("Database connected (PostgreSQL)")

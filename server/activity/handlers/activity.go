@@ -14,10 +14,10 @@ import (
 )
 
 func ListActivities(c fiber.Ctx) error {
-	schoolID, _ := c.Locals("school_id").(string)
+	schoolID, _ := c.Locals("school_id").(uint)
 	var items []models.Activity
 	q := config.DB.Order("start_at asc")
-	if schoolID != "" {
+	if schoolID != 0 {
 		q = q.Where("school_id = ?", schoolID)
 	}
 	if err := q.Find(&items).Error; err != nil {
@@ -46,10 +46,10 @@ func CreateActivity(c fiber.Ctx) error {
 	if uid, ok := c.Locals("user_id").(string); ok {
 		a.TeacherID = uid
 	}
-	if sid, ok := c.Locals("school_id").(string); ok {
+	if sid, ok := c.Locals("school_id").(uint); ok {
 		a.SchoolID = sid
 	}
-	log.Printf("[CreateActivity] teacher_id=%q school_id=%q", a.TeacherID, a.SchoolID)
+	log.Printf("[CreateActivity] teacher_id=%q school_id=%d", a.TeacherID, a.SchoolID)
 	if err := config.DB.Create(&a).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}

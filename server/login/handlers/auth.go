@@ -25,7 +25,7 @@ type RegisterRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Role     string `json:"role"`
-	SchoolID string `json:"school_id"`
+	SchoolID uint `json:"school_id"`
 }
 
 type LoginRequest struct {
@@ -202,14 +202,23 @@ func GoogleLogin(c fiber.Ctx) error {
 // ── Helper functions ──
 
 func generateJWT(user models.User) (string, error) {
+	schoolName := ""
+	if user.SchoolID != 0 {
+		var school models.School
+		if err := config.DB.First(&school, user.SchoolID).Error; err == nil {
+			schoolName = school.Name
+		}
+	}
+
 	claims := jwt.MapClaims{
-		"user_id":   user.ID,
-		"username":  user.Username,
-		"email":     user.Email,
-		"role":      user.Role,
-		"school_id": user.SchoolID,
-		"exp":       time.Now().Add(72 * time.Hour).Unix(),
-		"iat":       time.Now().Unix(),
+		"user_id":     user.ID,
+		"username":    user.Username,
+		"email":       user.Email,
+		"role":        user.Role,
+		"school_id":   user.SchoolID,
+		"school_name": schoolName,
+		"exp":         time.Now().Add(72 * time.Hour).Unix(),
+		"iat":         time.Now().Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

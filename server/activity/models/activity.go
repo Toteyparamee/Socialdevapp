@@ -57,7 +57,7 @@ func (s *StringArray) Scan(src interface{}) error {
 type Activity struct {
 	ID              uuid.UUID   `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
 	TeacherID       string      `gorm:"index;not null" json:"teacher_id"`
-	SchoolID        string      `gorm:"index;not null;default:''" json:"school_id"`
+	SchoolID        uint        `gorm:"index;not null;default:0" json:"school_id"`
 	Title           string      `gorm:"not null" json:"title"`
 	Description     string      `json:"description"`
 	Location        string      `json:"location"`

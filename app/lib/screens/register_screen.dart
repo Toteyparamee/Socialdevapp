@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../services/api_config.dart';
 import '../theme/app_theme.dart';
 
 enum UserRole { student, teacher, general }
@@ -22,7 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _schoolController = TextEditingController();
+  final _newSchoolController = TextEditingController();
 
   UserRole? _selectedRole;
   bool _obscurePassword = true;
@@ -31,6 +33,13 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool _acceptTerms = false;
   String? _errorMessage;
   String? _successMessage;
+
+  // School dropdown state
+  List<Map<String, dynamic>> _schools = [];
+  String? _selectedSchoolId;
+  bool _isAddingNewSchool = false;
+  bool _isLoadingSchools = false;
+  bool _isCreatingSchool = false;
 
   late AnimationController _entranceController;
   late AnimationController _buttonController;
@@ -53,6 +62,8 @@ class _RegisterScreenState extends State<RegisterScreen>
     _buttonScale = Tween<double>(begin: 1.0, end: 0.97).animate(
       CurvedAnimation(parent: _buttonController, curve: Curves.easeInOut),
     );
+
+    _loadSchools();
   }
 
   @override
@@ -63,8 +74,71 @@ class _RegisterScreenState extends State<RegisterScreen>
     _usernameController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _schoolController.dispose();
+    _newSchoolController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSchools() async {
+    setState(() => _isLoadingSchools = true);
+    try {
+      final res = await http.get(Uri.parse(ApiConfig.schoolsUrl));
+      if (res.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(res.body);
+        setState(() {
+          _schools = data.cast<Map<String, dynamic>>();
+        });
+      }
+    } catch (_) {
+      // ใช้รายการว่างถ้าโหลดไม่ได้
+    } finally {
+      setState(() => _isLoadingSchools = false);
+    }
+  }
+
+  Future<void> _createSchool() async {
+    final name = _newSchoolController.text.trim();
+    if (name.isEmpty) return;
+
+    setState(() => _isCreatingSchool = true);
+    try {
+      final res = await http.post(
+        Uri.parse(ApiConfig.schoolsUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'name': name}),
+      );
+
+      if (res.statusCode == 201) {
+        final school = jsonDecode(res.body) as Map<String, dynamic>;
+        setState(() {
+          _schools.add(school);
+          _schools.sort((a, b) =>
+              (a['name'] as String).compareTo(b['name'] as String));
+          _selectedSchoolId = school['id'].toString();
+          _isAddingNewSchool = false;
+          _newSchoolController.clear();
+        });
+      } else if (res.statusCode == 409) {
+        // โรงเรียนมีอยู่แล้ว — เลือกโรงเรียนนั้นแทน
+        final existing = _schools.firstWhere(
+          (s) => (s['name'] as String).toLowerCase() == name.toLowerCase(),
+          orElse: () => <String, dynamic>{},
+        );
+        if (existing.isNotEmpty) {
+          setState(() {
+            _selectedSchoolId = existing['id'].toString();
+            _isAddingNewSchool = false;
+            _newSchoolController.clear();
+          });
+        } else {
+          await _loadSchools();
+          setState(() => _isAddingNewSchool = false);
+        }
+      }
+    } catch (_) {
+      // silent — ผู้ใช้ยังเพิ่มได้ใหม่
+    } finally {
+      setState(() => _isCreatingSchool = false);
+    }
   }
 
   String get _usernameLabel {
@@ -91,6 +165,15 @@ class _RegisterScreenState extends State<RegisterScreen>
     };
   }
 
+  String? get _selectedSchoolName {
+    if (_selectedSchoolId == null) return null;
+    final school = _schools.firstWhere(
+      (s) => s['id'].toString() == _selectedSchoolId,
+      orElse: () => <String, dynamic>{},
+    );
+    return school['name'] as String?;
+  }
+
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -112,7 +195,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         email: _usernameController.text.trim(),
         password: _passwordController.text,
         role: _roleName,
-        schoolId: _schoolController.text.trim(),
+        schoolId: int.tryParse(_selectedSchoolId ?? '') ?? 0,
       );
 
       if (!mounted) return;
@@ -122,7 +205,6 @@ class _RegisterScreenState extends State<RegisterScreen>
         _successMessage = 'สมัครสมาชิกสำเร็จ!';
       });
 
-      // Auto login - pop all routes back to AuthGate which will show Dashboard
       await Future.delayed(const Duration(milliseconds: 1200));
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
     } on AuthException catch (e) {
@@ -333,9 +415,7 @@ class _RegisterScreenState extends State<RegisterScreen>
           children: [
             // Display name
             _buildLabel(
-              _selectedRole == UserRole.general
-                  ? 'ชื่อหน่วยงาน'
-                  : 'ชื่อที่แสดง',
+              _selectedRole == UserRole.general ? 'ชื่อหน่วยงาน' : 'ชื่อที่แสดง',
             ),
             const SizedBox(height: 8),
             TextFormField(
@@ -355,22 +435,13 @@ class _RegisterScreenState extends State<RegisterScreen>
                 return null;
               },
             ),
+            // School dropdown (นักเรียน / ครู เท่านั้น)
             if (_selectedRole == UserRole.student ||
                 _selectedRole == UserRole.teacher) ...[
               const SizedBox(height: 18),
               _buildLabel('โรงเรียน'),
               const SizedBox(height: 8),
-              TextFormField(
-                controller: _schoolController,
-                style: const TextStyle(fontSize: 16, color: Color(0xFF1A1A2E)),
-                decoration: _inputDecoration(hintText: 'ชื่อโรงเรียน'),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'กรุณากรอกชื่อโรงเรียน';
-                  }
-                  return null;
-                },
-              ),
+              _buildSchoolSelector(),
             ],
             const SizedBox(height: 18),
             // Username
@@ -592,6 +663,319 @@ class _RegisterScreenState extends State<RegisterScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSchoolSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Dropdown
+        FormField<String>(
+          validator: (_) {
+            if (!_isAddingNewSchool && _selectedSchoolId == null) {
+              return 'กรุณาเลือกโรงเรียน';
+            }
+            return null;
+          },
+          builder: (state) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: _isAddingNewSchool
+                      ? null
+                      : () => _showSchoolBottomSheet(context),
+                  child: Container(
+                    height: 54,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: _isAddingNewSchool
+                          ? const Color(0xFFF3F4F6)
+                          : const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: state.hasError
+                            ? Colors.red.shade400
+                            : const Color(0xFFE8ECF0),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _isLoadingSchools
+                              ? Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 1.5,
+                                        color: Colors.grey.shade400,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'กำลังโหลด...',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade400,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Text(
+                                  _isAddingNewSchool
+                                      ? 'กำลังเพิ่มโรงเรียนใหม่...'
+                                      : (_selectedSchoolId != null
+                                          ? (_selectedSchoolName ?? '')
+                                          : 'เลือกโรงเรียน'),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: _selectedSchoolId != null &&
+                                            !_isAddingNewSchool
+                                        ? const Color(0xFF1A1A2E)
+                                        : Colors.grey.shade400,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                        ),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: Colors.grey.shade400,
+                          size: 22,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (state.hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, left: 4),
+                    child: Text(
+                      state.errorText!,
+                      style: TextStyle(
+                        color: Colors.red.shade400,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        // ปุ่มเพิ่มโรงเรียนใหม่ / ยกเลิก
+        const SizedBox(height: 10),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: _isAddingNewSchool
+              ? _buildNewSchoolInput()
+              : GestureDetector(
+                  key: const ValueKey('add-btn'),
+                  onTap: () => setState(() => _isAddingNewSchool = true),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.add_circle_outline_rounded,
+                        size: 16,
+                        color: AppTheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'เพิ่มโรงเรียนใหม่',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNewSchoolInput() {
+    return Column(
+      key: const ValueKey('new-school-input'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _newSchoolController,
+                autofocus: true,
+                style:
+                    const TextStyle(fontSize: 16, color: Color(0xFF1A1A2E)),
+                decoration: _inputDecoration(hintText: 'ชื่อโรงเรียนใหม่'),
+                validator: (_) {
+                  if (_isAddingNewSchool &&
+                      _newSchoolController.text.trim().isEmpty) {
+                    return 'กรุณากรอกชื่อโรงเรียน';
+                  }
+                  return null;
+                },
+                onFieldSubmitted: (_) => _createSchool(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _isCreatingSchool ? null : _createSchool,
+              child: Container(
+                height: 54,
+                width: 54,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A2E),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: _isCreatingSchool
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 20),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        GestureDetector(
+          onTap: () => setState(() {
+            _isAddingNewSchool = false;
+            _newSchoolController.clear();
+          }),
+          child: Text(
+            'ยกเลิก',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showSchoolBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        final searchController = TextEditingController();
+        List<Map<String, dynamic>> filtered = List.from(_schools);
+
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            void onSearch(String q) {
+              setModalState(() {
+                filtered = _schools
+                    .where((s) => (s['name'] as String)
+                        .toLowerCase()
+                        .contains(q.toLowerCase()))
+                    .toList();
+              });
+            }
+
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.6,
+              maxChildSize: 0.9,
+              minChildSize: 0.4,
+              builder: (_, scrollController) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'เลือกโรงเรียน',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1A2E),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: searchController,
+                      onChanged: onSearch,
+                      decoration: _inputDecoration(hintText: 'ค้นหาโรงเรียน'),
+                      style: const TextStyle(
+                          fontSize: 16, color: Color(0xFF1A1A2E)),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? Center(
+                              child: Text(
+                                'ไม่พบโรงเรียน',
+                                style: TextStyle(color: Colors.grey.shade400),
+                              ),
+                            )
+                          : ListView.builder(
+                              controller: scrollController,
+                              itemCount: filtered.length,
+                              itemBuilder: (_, i) {
+                                final school = filtered[i];
+                                final id = school['id'].toString();
+                                final isSelected = _selectedSchoolId == id;
+                                return ListTile(
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  title: Text(
+                                    school['name'] as String,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: isSelected
+                                          ? AppTheme.primary
+                                          : const Color(0xFF1A1A2E),
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                    ),
+                                  ),
+                                  trailing: isSelected
+                                      ? Icon(Icons.check_rounded,
+                                          color: AppTheme.primary, size: 20)
+                                      : null,
+                                  onTap: () {
+                                    setState(() => _selectedSchoolId = id);
+                                    Navigator.pop(ctx);
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

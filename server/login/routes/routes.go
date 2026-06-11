@@ -19,6 +19,10 @@ func Setup(app *fiber.App) {
 	auth.Post("/login", handlers.Login)
 	auth.Post("/google", handlers.GoogleLogin)
 
+	// ── School routes (public) ──
+	app.Get("/schools", handlers.GetSchools)
+	app.Post("/schools", handlers.CreateSchool)
+
 	// ── Public user lookup (ชื่อ + avatar เท่านั้น) ──
 	app.Post("/users/lookup", handlers.LookupUsers)
 

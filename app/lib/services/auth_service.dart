@@ -15,6 +15,7 @@ class AuthService extends ChangeNotifier {
   static const _keyAvatarUrl = 'avatar_url';
   static const _keyUserId = 'user_id';
   static const _keySchoolId = 'school_id';
+  static const _keySchoolName = 'school_name';
 
   // ── Config ──
   static String get _baseUrl => ApiConfig.loginUrl;
@@ -30,7 +31,8 @@ class AuthService extends ChangeNotifier {
   String? _token;
   String? _avatarUrl;
   String? _userId;
-  String? _schoolId;
+  int? _schoolId;
+  String? _schoolName;
   bool _isLoading = true;
 
   bool get isLoggedIn => _isLoggedIn;
@@ -39,7 +41,8 @@ class AuthService extends ChangeNotifier {
   String? get token => _token;
   String? get avatarUrl => _avatarUrl;
   String? get userId => _userId;
-  String? get schoolId => _schoolId;
+  int? get schoolId => _schoolId;
+  String? get schoolName => _schoolName;
   bool get isLoading => _isLoading;
 
   AuthService() {
@@ -54,7 +57,8 @@ class AuthService extends ChangeNotifier {
     _token = prefs.getString(_keyToken);
     _avatarUrl = prefs.getString(_keyAvatarUrl);
     _userId = prefs.getString(_keyUserId);
-    _schoolId = prefs.getString(_keySchoolId);
+    _schoolId = prefs.getInt(_keySchoolId);
+    _schoolName = prefs.getString(_keySchoolName);
     _isLoading = false;
     notifyListeners();
   }
@@ -65,7 +69,8 @@ class AuthService extends ChangeNotifier {
     required String token,
     String? avatarUrl,
     String? userId,
-    String? schoolId,
+    int? schoolId,
+    String? schoolName,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyIsLoggedIn, true);
@@ -74,7 +79,8 @@ class AuthService extends ChangeNotifier {
     await prefs.setString(_keyToken, token);
     if (avatarUrl != null) await prefs.setString(_keyAvatarUrl, avatarUrl);
     if (userId != null) await prefs.setString(_keyUserId, userId);
-    if (schoolId != null) await prefs.setString(_keySchoolId, schoolId);
+    if (schoolId != null) await prefs.setInt(_keySchoolId, schoolId);
+    if (schoolName != null) await prefs.setString(_keySchoolName, schoolName);
 
     _isLoggedIn = true;
     _username = username;
@@ -83,6 +89,7 @@ class AuthService extends ChangeNotifier {
     _avatarUrl = avatarUrl;
     _userId = userId;
     _schoolId = schoolId;
+    _schoolName = schoolName;
     notifyListeners();
   }
 
@@ -110,7 +117,8 @@ class AuthService extends ChangeNotifier {
         token: data['token'],
         avatarUrl: data['user']['avatar_url'],
         userId: data['user']['id']?.toString(),
-        schoolId: data['user']['school_id']?.toString(),
+        schoolId: data['user']['school_id'] is int ? data['user']['school_id'] as int : int.tryParse(data['user']['school_id']?.toString() ?? ''),
+        schoolName: data['user']['school_name'] as String?,
       );
     } else {
       final data = jsonDecode(response.body);
@@ -124,7 +132,7 @@ class AuthService extends ChangeNotifier {
     required String email,
     required String password,
     required String role,
-    String schoolId = '',
+    int schoolId = 0,
   }) async {
     final response = await http
         .post(
@@ -147,7 +155,8 @@ class AuthService extends ChangeNotifier {
         role: data['user']['role'],
         token: data['token'],
         userId: data['user']['id']?.toString(),
-        schoolId: data['user']['school_id']?.toString(),
+        schoolId: data['user']['school_id'] is int ? data['user']['school_id'] as int : int.tryParse(data['user']['school_id']?.toString() ?? ''),
+        schoolName: data['user']['school_name'] as String?,
       );
     } else {
       final data = jsonDecode(response.body);
@@ -201,7 +210,8 @@ class AuthService extends ChangeNotifier {
         token: data['token'],
         avatarUrl: data['user']['avatar_url'],
         userId: data['user']['id']?.toString(),
-        schoolId: data['user']['school_id']?.toString(),
+        schoolId: data['user']['school_id'] is int ? data['user']['school_id'] as int : int.tryParse(data['user']['school_id']?.toString() ?? ''),
+        schoolName: data['user']['school_name'] as String?,
       );
     } else {
       final data = jsonDecode(response.body);
@@ -221,6 +231,7 @@ class AuthService extends ChangeNotifier {
     _avatarUrl = null;
     _userId = null;
     _schoolId = null;
+    _schoolName = null;
     notifyListeners();
   }
 
