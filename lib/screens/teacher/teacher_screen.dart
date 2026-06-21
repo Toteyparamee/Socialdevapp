@@ -1,0 +1,834 @@
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../theme/app_theme.dart';
+import '../../models/activity.dart';
+import '../../services/auth_service.dart';
+import '../../services/activity_service.dart';
+import '../../services/image_service.dart';
+import '../student/school_activities_screen.dart';
+import '../../widgets/chat_screen.dart';
+import 'add_activity_screen.dart';
+import 'review_works_screen.dart';
+import '../../widgets/settings_screen.dart';
+import '../../widgets/calendar_section.dart';
+
+class TeacherScreen extends StatefulWidget {
+  const TeacherScreen({super.key});
+
+  @override
+  State<TeacherScreen> createState() => _TeacherScreenState();
+}
+
+class _TeacherScreenState extends State<TeacherScreen> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: const [SchoolActivitiesScreen(), _HomeTab(), _ProfileTab()],
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              children: [
+                _buildNavItem(
+                  index: 0,
+                  icon: Icons.school_outlined,
+                  activeIcon: Icons.school_rounded,
+                  label: 'กิจกรรมโรงเรียน',
+                ),
+                _buildNavItem(
+                  index: 1,
+                  icon: Icons.event_outlined,
+                  activeIcon: Icons.event_rounded,
+                  label: 'กิจกรรม',
+                ),
+                _buildNavItem(
+                  index: 2,
+                  icon: Icons.person_outline,
+                  activeIcon: Icons.person_rounded,
+                  label: 'โปรไฟล์',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required int index,
+    required IconData icon,
+    required IconData activeIcon,
+    required String label,
+  }) {
+    final isActive = _currentIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _currentIndex = index),
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? AppTheme.primary.withValues(alpha: 0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                isActive ? activeIcon : icon,
+                color: isActive ? AppTheme.primary : AppTheme.textSecondary,
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive ? AppTheme.primary : AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------- Tab: Home ----------
+class _HomeTab extends StatefulWidget {
+  const _HomeTab();
+
+  @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<_HomeTab> {
+  final PageController _bannerController = PageController();
+  Timer? _autoScrollTimer;
+  int _currentBanner = 0;
+  DateTime? _selectedDate;
+  List<Activity> _bannerActivities = [];
+
+  // เมนูลัด — เพิ่ม "เพิ่มกิจกรรม" และ "ตรวจงานนักเรียน"
+  static const _menus = [
+    _MenuData(
+      icon: Icons.add_circle_rounded,
+      label: 'เพิ่มกิจกรรม',
+      color: Color.fromARGB(255, 107, 166, 255),
+    ),
+    _MenuData(
+      icon: Icons.fact_check_rounded,
+      label: 'ตรวจงานนักเรียน',
+      color: Color.fromARGB(255, 107, 166, 255),
+    ),
+    _MenuData(
+      icon: Icons.campaign_rounded,
+      label: 'แจ้งปัญหา',
+      color: Color.fromARGB(255, 107, 166, 255),
+    ),
+    _MenuData(
+      icon: Icons.chat_bubble_rounded,
+      label: 'แชท',
+      color: Color.fromARGB(255, 107, 166, 255),
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadBanners());
+  }
+
+  Future<void> _loadBanners() async {
+    final svc = context.read<ActivityService>();
+    await svc.fetchActivities();
+    if (!mounted) return;
+    final all = svc.activities;
+    final withImages = all.where((a) => a.imageIds.isNotEmpty).toList();
+    final source = withImages.isNotEmpty ? withImages : all;
+    if (source.isEmpty) return;
+    final picks = (source.toList()..shuffle(Random())).take(5).toList();
+    setState(() => _bannerActivities = picks);
+    _startAutoScroll();
+  }
+
+  @override
+  void dispose() {
+    _autoScrollTimer?.cancel();
+    _bannerController.dispose();
+    super.dispose();
+  }
+
+  void _startAutoScroll() {
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || _bannerActivities.isEmpty) return;
+      final next = (_currentBanner + 1) % _bannerActivities.length;
+      _bannerController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthService>();
+
+    return Scaffold(
+      backgroundColor: AppTheme.inputBg,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ──
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                      backgroundImage: auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty
+                          ? NetworkImage(auth.avatarUrl!)
+                          : null,
+                      child: auth.avatarUrl == null || auth.avatarUrl!.isEmpty
+                          ? const Icon(Icons.school_rounded, color: AppTheme.primary, size: 26)
+                          : null,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'สวัสดี, อ.${auth.username ?? 'ผู้ใช้'} 👋',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            auth.role ?? '',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {},
+                      icon: const Icon(
+                        Icons.notifications_outlined,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // ── Banner ──
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 170,
+                      child: _bannerActivities.isEmpty
+                          ? Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                              ),
+                              alignment: Alignment.center,
+                              child: const CircularProgressIndicator(),
+                            )
+                          : PageView.builder(
+                              controller: _bannerController,
+                              itemCount: _bannerActivities.length,
+                              onPageChanged: (i) =>
+                                  setState(() => _currentBanner = i),
+                              itemBuilder: (context, i) {
+                                final act = _bannerActivities[i];
+                                final imgSvc = context.read<ImageService>();
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      act.imageIds.isNotEmpty
+                                          ? Image.network(
+                                              imgSvc.getImageUrl(act.imageIds.first),
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  Container(color: const Color(0xFFE8ECF0)),
+                                            )
+                                          : Container(
+                                              color: AppTheme.primary.withValues(alpha: 0.15),
+                                              child: const Icon(
+                                                Icons.event_rounded,
+                                                size: 48,
+                                                color: AppTheme.primary,
+                                              ),
+                                            ),
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              Colors.transparent,
+                                              Colors.black.withValues(alpha: 0.7),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        left: 16,
+                                        right: 16,
+                                        bottom: 16,
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              act.title,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              act.location,
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(alpha: 0.85),
+                                                fontSize: 12,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(_bannerActivities.length, (i) {
+                        final isActive = i == _currentBanner;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: isActive ? 20 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? AppTheme.primary
+                                : const Color(0xFFD1D5DB),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // ── เมนูลัด ──
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 20,
+                    horizontal: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 12,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 20,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.85,
+                        ),
+                    itemCount: _menus.length,
+                    itemBuilder: (context, i) {
+                      final m = _menus[i];
+                      return GestureDetector(
+                        onTap: () {
+                          switch (m.label) {
+                            case 'เพิ่มกิจกรรม':
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const AddActivityScreen(),
+                                ),
+                              ).then((_) {
+                                if (mounted) _loadBanners();
+                              });
+                            case 'ตรวจงานนักเรียน':
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ReviewWorksScreen(),
+                                ),
+                              );
+                            case 'แชท':
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const TicketListScreen(
+                                    registrationTitle: 'แชททั้งหมด',
+                                  ),
+                                ),
+                              );
+                          }
+                        },
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: m.color.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Icon(m.icon, color: m.color, size: 26),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              m.label,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.textPrimary,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              _buildCalendarSection(),
+
+              const SizedBox(height: 24),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _selectedDate != null
+                          ? 'กิจกรรมวันที่ ${_selectedDate!.day} ${_thaiMonthsShort[_selectedDate!.month]}'
+                          : 'กิจกรรมที่กำลังมาถึง',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    if (_selectedDate != null)
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedDate = null),
+                        child: const Text(
+                          'ดูทั้งหมด',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              ..._filteredEvents.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: e.color.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                '${e.eventDate.day}',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: e.color,
+                                ),
+                              ),
+                              Text(
+                                _thaiMonthsShort[e.eventDate.month],
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: e.color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                e.title,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                e.subtitle,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: e.color.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            e.status,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: e.color,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const _thaiMonthsShort = [
+    '',
+    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+  ];
+
+  List<Activity> get _upcomingActivities {
+    final list = List<Activity>.from(context.read<ActivityService>().activities)
+      ..sort((a, b) => a.startAt.compareTo(b.startAt));
+    return list;
+  }
+
+  _UpcomingEvent _activityToEvent(Activity a) {
+    final now = DateTime.now();
+    final diff = a.startAt.difference(now);
+    final Color color;
+    final String status;
+    if (diff.isNegative) {
+      color = Colors.grey;
+      status = 'ผ่านไปแล้ว';
+    } else if (diff.inDays <= 3) {
+      color = const Color(0xFFEF4444);
+      status = 'ใกล้ถึงแล้ว';
+    } else if (diff.inDays <= 7) {
+      color = const Color(0xFFFBBF24);
+      status = 'อีก ${diff.inDays} วัน';
+    } else {
+      color = const Color(0xFF10B981);
+      status = 'อีก ${diff.inDays} วัน';
+    }
+    return _UpcomingEvent(
+      title: a.title,
+      subtitle: a.location,
+      eventDate: a.startAt,
+      status: status,
+      color: color,
+    );
+  }
+
+  List<_UpcomingEvent> get _filteredEvents {
+    final events = _upcomingActivities.map(_activityToEvent).toList();
+    if (_selectedDate == null) return events;
+    return events
+        .where((e) =>
+            e.eventDate.year == _selectedDate!.year &&
+            e.eventDate.month == _selectedDate!.month &&
+            e.eventDate.day == _selectedDate!.day)
+        .toList();
+  }
+
+  Widget _buildCalendarSection() {
+    return CalendarSection(
+      selectedDate: _selectedDate,
+      onDateSelected: (date) => setState(() => _selectedDate = date),
+    );
+  }
+}
+
+class _MenuData {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _MenuData({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+}
+
+class _UpcomingEvent {
+  final String title;
+  final String subtitle;
+  final DateTime eventDate;
+  final String status;
+  final Color color;
+  const _UpcomingEvent({
+    required this.title,
+    required this.subtitle,
+    required this.eventDate,
+    required this.status,
+    required this.color,
+  });
+}
+
+// ---------- Tab: โปรไฟล์ ----------
+class _ProfileTab extends StatelessWidget {
+  const _ProfileTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthService>();
+
+    return Scaffold(
+      backgroundColor: AppTheme.inputBg,
+      appBar: AppBar(
+        title: const Text('โปรไฟล์'),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: AppTheme.textPrimary,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Center(
+            child: CircleAvatar(
+              radius: 44,
+              backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
+              backgroundImage: auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty
+                  ? NetworkImage(auth.avatarUrl!)
+                  : null,
+              child: auth.avatarUrl == null || auth.avatarUrl!.isEmpty
+                  ? const Icon(Icons.school_rounded, size: 44, color: AppTheme.primary)
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              'อ.${auth.username ?? 'ผู้ใช้'}',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              auth.role ?? '',
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+          _buildMenuItem(
+            icon: Icons.add_circle_outline,
+            label: 'เพิ่มกิจกรรม',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AddActivityScreen()),
+            ),
+          ),
+          _buildMenuItem(
+            icon: Icons.fact_check_outlined,
+            label: 'ตรวจงานนักเรียน',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ReviewWorksScreen()),
+            ),
+          ),
+          _buildMenuItem(
+            icon: Icons.settings_outlined,
+            label: 'ตั้งค่า',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 52,
+            child: OutlinedButton.icon(
+              onPressed: () => context.read<AuthService>().logout(),
+              icon: const Icon(Icons.logout_rounded, color: Colors.red),
+              label: const Text(
+                'ออกจากระบบ',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.red.shade200),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: AppTheme.textPrimary),
+        title: Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w500,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        trailing: const Icon(
+          Icons.chevron_right,
+          color: AppTheme.textSecondary,
+        ),
+        onTap: onTap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+}
