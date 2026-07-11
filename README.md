@@ -602,17 +602,39 @@ main.dart
 
 ```mermaid
 flowchart LR
-    MAIN["main.dart"] --> GATE["AuthGate"]
-
-    GATE --> LOADING["Loading\nCircularProgressIndicator"] --> GATE
-
-    GATE --> WELCOME["ไม่ได้ login\nWelcomeScreen"]
+    GATE["AuthGate"] --> WELCOME["WelcomeScreen"]
     WELCOME --> LOGIN["LoginScreen"]
-    LOGIN --> GATE
+    LOGIN --> REGISTER["RegisterScreen"]
 
-    GATE --> TEACHER["role: ครู\nTeacherScreen"]
-    GATE --> ORG["role: หน่วยงาน\nOrganizationScreen"]
-    GATE --> STUDENT["role: นักเรียน\nStudentScreen"]
+    GATE --> STUDENT["StudentScreen"]
+    STUDENT --> MAPVIEW["MapView"]
+    MAPVIEW --> DETAIL["DetailScreen"]
+    DETAIL --> REGISTER_FORM["ActivityRegisterForm"]
+    STUDENT --> SCHOOL_ACT["SchoolActivitiesScreen"]
+    SCHOOL_ACT --> ACT_DETAIL["ActivityDetailScreen"]
+    ACT_DETAIL --> ACT_REGISTER["ActivityRegisterScreen"]
+    STUDENT --> MY_REG["MyRegistrationsScreen"]
+    MY_REG --> REG_DETAIL["RegistrationDetailScreen"]
+    REG_DETAIL --> CHATROOM["ChatRoomScreen"]
+    STUDENT --> SETTINGS["SettingsScreen"]
+
+    GATE --> TEACHER["TeacherScreen"]
+    TEACHER --> SCHOOL_ACT
+    TEACHER --> ADD_ACT["AddActivityScreen"]
+    ADD_ACT --> LOCATION_PICKER["LocationPickerScreen"]
+    TEACHER --> REVIEW["ReviewWorksScreen"]
+    REVIEW --> SUBMISSIONS["SubmissionsScreen"]
+    SUBMISSIONS --> REVIEW_DETAIL["ReviewDetailScreen"]
+    TEACHER --> TICKETS["TicketListScreen"]
+    TICKETS --> CHATROOM
+    TEACHER --> SETTINGS
+
+    GATE --> ORG["OrganizationScreen"]
+    ORG --> MAPVIEW
+    ORG --> ADD_ACT
+    ORG --> REVIEW
+    ORG --> TICKETS
+    ORG --> SETTINGS
 ```
 
 `AuthService` โหลด role ที่บันทึกไว้ใน `SharedPreferences` (`user_role`) ตอนเปิดแอปใหม่ จึงข้าม WelcomeScreen/LoginScreen ไปหน้าตาม role ได้ทันทีถ้าเคย login ค้างไว้
