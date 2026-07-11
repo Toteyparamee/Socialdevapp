@@ -602,7 +602,9 @@ main.dart
 
 ```mermaid
 flowchart LR
-    GATE["AuthGate"] --> WELCOME["WelcomeScreen"]
+    MAIN["MainScreen"] --> GATE["AuthGate"]
+
+    GATE --> WELCOME["WelcomeScreen"]
     WELCOME --> LOGIN["LoginScreen"]
     LOGIN --> REGISTER["RegisterScreen"]
 
