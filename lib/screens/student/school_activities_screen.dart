@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
@@ -9,6 +8,9 @@ import '../../models/activity.dart';
 import '../../services/activity_service.dart';
 import '../../services/image_service.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/app_map/app_map.dart';
+import '../../widgets/app_map/app_map_controller.dart';
+import '../../widgets/app_map/app_map_types.dart';
 
 class SchoolActivitiesScreen extends StatefulWidget {
   const SchoolActivitiesScreen({super.key});
@@ -346,19 +348,19 @@ class _ActivityDetailScreen extends StatefulWidget {
 }
 
 class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
-  GoogleMapController? _mapController;
+  final AppMapController _mapController = AppMapController(initialZoom: 16);
   double _currentZoom = 16;
 
   Activity get activity => widget.activity;
 
   void _zoomIn() {
     _currentZoom = (_currentZoom + 1).clamp(1, 20);
-    _mapController?.animateCamera(CameraUpdate.zoomTo(_currentZoom));
+    _mapController.setZoom(_currentZoom);
   }
 
   void _zoomOut() {
     _currentZoom = (_currentZoom - 1).clamp(1, 20);
-    _mapController?.animateCamera(CameraUpdate.zoomTo(_currentZoom));
+    _mapController.setZoom(_currentZoom);
   }
 
   Future<void> _openGoogleMaps() async {
@@ -499,35 +501,24 @@ class _ActivityDetailScreenState extends State<_ActivityDetailScreen> {
                       height: 200,
                       child: Stack(
                         children: [
-                          GoogleMap(
-                            initialCameraPosition: CameraPosition(
-                              target: LatLng(
-                                activity.latitude ?? 13.7563,
-                                activity.longitude ?? 100.5018,
-                              ),
-                              zoom: 16,
+                          AppMap(
+                            initialCenter: AppLatLng(
+                              activity.latitude ?? 13.7563,
+                              activity.longitude ?? 100.5018,
                             ),
-                            onMapCreated: (controller) =>
-                                _mapController = controller,
-                            markers: {
-                              Marker(
-                                markerId: const MarkerId('activity_location'),
-                                position: LatLng(
+                            initialZoom: 16,
+                            controller: _mapController,
+                            markers: [
+                              AppMarker(
+                                id: 'activity_location',
+                                position: AppLatLng(
                                   activity.latitude ?? 13.7563,
                                   activity.longitude ?? 100.5018,
                                 ),
-                                infoWindow: InfoWindow(
-                                  title: activity.title,
-                                  snippet: activity.location,
-                                ),
+                                title: activity.title,
+                                snippet: activity.location,
                               ),
-                            },
-                            zoomControlsEnabled: false,
-                            zoomGesturesEnabled: true,
-                            scrollGesturesEnabled: true,
-                            rotateGesturesEnabled: false,
-                            tiltGesturesEnabled: false,
-                            myLocationButtonEnabled: false,
+                            ],
                           ),
                           // Zoom buttons
                           Positioned(

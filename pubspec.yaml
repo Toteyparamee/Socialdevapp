@@ -34,6 +34,8 @@ dependencies:
   google_maps_flutter: ^2.10.0
   google_maps_flutter_android: ^2.14.2
   google_maps_flutter_platform_interface: ^2.9.0
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
   image_picker: ^1.1.2
   sliding_up_panel: ^2.0.0+1
   shimmer: ^3.0.0

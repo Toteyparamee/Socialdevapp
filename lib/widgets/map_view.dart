@@ -1,12 +1,16 @@
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' show BitmapDescriptor;
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../models/activity.dart';
 import '../services/activity_service.dart';
 import '../screens/detail_screen.dart';
+import 'app_map/app_map.dart';
+import 'app_map/app_map_controller.dart';
+import 'app_map/app_map_types.dart';
 import 'activity_bottom_sheet.dart';
 import 'filter_panel.dart';
 
@@ -18,20 +22,19 @@ class MapView extends StatefulWidget {
 }
 
 class _MapViewState extends State<MapView> with TickerProviderStateMixin {
-  GoogleMapController? _mapController;
+  final AppMapController _mapController = AppMapController(initialZoom: 13.5);
   Activity? _selectedActivity;
   MapFilter _mapFilter = const MapFilter();
   final _searchController = TextEditingController();
   final Map<String, BitmapDescriptor> _activitySchoolIcons = {};
   final Map<String, BitmapDescriptor> _activityPublicIcons = {};
+  final Map<String, Widget> _activitySchoolWebIcons = {};
+  final Map<String, Widget> _activityPublicWebIcons = {};
 
   late AnimationController _sheetController;
   late Animation<double> _sheetAnimation;
 
-  static const _initialCamera = CameraPosition(
-    target: LatLng(13.8200, 100.5700),
-    zoom: 13.5,
-  );
+  static const _initialCenter = AppLatLng(13.8200, 100.5700);
 
   @override
   void initState() {
@@ -54,7 +57,7 @@ class _MapViewState extends State<MapView> with TickerProviderStateMixin {
   void dispose() {
     _sheetController.dispose();
     _searchController.dispose();
-    _mapController?.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -69,9 +72,7 @@ class _MapViewState extends State<MapView> with TickerProviderStateMixin {
     }
     if (permission == LocationPermission.deniedForever) return;
     final pos = await Geolocator.getCurrentPosition();
-    _mapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 15),
-    );
+    _mapController.animateTo(AppLatLng(pos.latitude, pos.longitude), zoom: 15);
   }
 
   // ── Filter helpers ────────────────────────────────────────────────────────
@@ -87,15 +88,21 @@ class _MapViewState extends State<MapView> with TickerProviderStateMixin {
 
   // ── Markers ───────────────────────────────────────────────────────────────
 
-  Set<Marker> get _markers {
-    return _filteredActivities.map((a) => Marker(
-      markerId: MarkerId('activity_${a.id}'),
-      position: LatLng(a.latitude!, a.longitude!),
-      icon: _mapFilter.showActivities
-          ? (_activitySchoolIcons[a.id] ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet))
-          : (_activityPublicIcons[a.id] ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow)),
+  List<AppMarker> get _markers {
+    return _filteredActivities.map((a) => AppMarker(
+      id: 'activity_${a.id}',
+      position: AppLatLng(a.latitude!, a.longitude!),
+      mobileIcon: kIsWeb
+          ? null
+          : (_mapFilter.showActivities
+              ? (_activitySchoolIcons[a.id] ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet))
+              : (_activityPublicIcons[a.id] ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow))),
+      webIcon: _mapFilter.showActivities
+          ? _activitySchoolWebIcons[a.id]
+          : _activityPublicWebIcons[a.id],
+      hue: _mapFilter.showActivities ? BitmapDescriptor.hueViolet : BitmapDescriptor.hueYellow,
       onTap: () => _selectActivity(a),
-    )).toSet();
+    )).toList();
   }
 
   // ── Icon builders ─────────────────────────────────────────────────────────
@@ -109,14 +116,28 @@ class _MapViewState extends State<MapView> with TickerProviderStateMixin {
         .where((a) => a.latitude != null && a.longitude != null);
     for (final a in all) {
       if (!_activitySchoolIcons.containsKey(a.id)) {
-        _activitySchoolIcons[a.id] = await _buildMarkerIcon(
+        if (!kIsWeb) {
+          _activitySchoolIcons[a.id] = await _buildMarkerIcon(
+            label: a.title,
+            iconData: Icons.school_rounded,
+            color: schoolColor,
+          );
+        }
+        _activitySchoolWebIcons[a.id] = _buildWebMarkerIcon(
           label: a.title,
           iconData: Icons.school_rounded,
           color: schoolColor,
         );
       }
       if (!_activityPublicIcons.containsKey(a.id)) {
-        _activityPublicIcons[a.id] = await _buildMarkerIcon(
+        if (!kIsWeb) {
+          _activityPublicIcons[a.id] = await _buildMarkerIcon(
+            label: a.title,
+            iconData: Icons.public_rounded,
+            color: publicColor,
+          );
+        }
+        _activityPublicWebIcons[a.id] = _buildWebMarkerIcon(
           label: a.title,
           iconData: Icons.public_rounded,
           color: publicColor,
@@ -124,6 +145,24 @@ class _MapViewState extends State<MapView> with TickerProviderStateMixin {
       }
     }
     if (mounted) setState(() {});
+  }
+
+  Widget _buildWebMarkerIcon({
+    required String label,
+    required IconData iconData,
+    required Color color,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 2.5),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 4),
+        ],
+      ),
+      child: Icon(iconData, color: color, size: 20),
+    );
   }
 
   Future<BitmapDescriptor> _buildMarkerIcon({
@@ -191,7 +230,7 @@ class _MapViewState extends State<MapView> with TickerProviderStateMixin {
   void _selectActivity(Activity a) {
     setState(() { _selectedActivity = a; });
     _sheetController.forward(from: 0);
-    _mapController?.animateCamera(CameraUpdate.newLatLng(LatLng(a.latitude!, a.longitude!)));
+    _mapController.animateTo(AppLatLng(a.latitude!, a.longitude!));
   }
 
   void _clearSelection() {
@@ -231,16 +270,14 @@ class _MapViewState extends State<MapView> with TickerProviderStateMixin {
 
     return Stack(
       children: [
-        GoogleMap(
-          initialCameraPosition: _initialCamera,
+        AppMap(
+          initialCenter: _initialCenter,
+          initialZoom: 13.5,
+          controller: _mapController,
           markers: _markers,
           myLocationEnabled: true,
-          myLocationButtonEnabled: false,
-          zoomControlsEnabled: false,
-          mapToolbarEnabled: false,
-          onMapCreated: (c) => _mapController = c,
           onTap: (_) => _clearSelection(),
-          style: _mapStyle,
+          mobileMapStyle: _mapStyle,
         ),
         _buildTopBar(),
         Positioned(
@@ -248,9 +285,9 @@ class _MapViewState extends State<MapView> with TickerProviderStateMixin {
           bottom: _selectedActivity != null ? 220 : 100,
           child: Column(
             children: [
-              _mapBtn(Icons.add, () => _mapController?.animateCamera(CameraUpdate.zoomIn())),
+              _mapBtn(Icons.add, () => _mapController.zoomIn()),
               const SizedBox(height: 8),
-              _mapBtn(Icons.remove, () => _mapController?.animateCamera(CameraUpdate.zoomOut())),
+              _mapBtn(Icons.remove, () => _mapController.zoomOut()),
               const SizedBox(height: 8),
               _mapBtn(Icons.my_location, _goToMyLocation),
             ],

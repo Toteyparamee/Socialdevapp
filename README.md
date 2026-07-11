@@ -596,6 +596,34 @@ main.dart
 
 ---
 
+## App Bootstrap & Auth Gate
+
+คำอธิบาย: สิ่งที่เกิดขึ้นทุกครั้งที่เปิดแอป ก่อนเข้าสู่หน้าจอตาม role — เริ่มจาก `main()` ไปจนถึง `AuthGate` ตัดสินใจว่าจะแสดงหน้าไหน
+
+```mermaid
+flowchart TD
+    MAIN["main()\nlib/main.dart"] --> FIREBASE["Firebase.initializeApp()"]
+    FIREBASE --> PROVIDERS["ChangeNotifierProvider ครอบแอป\nAuthService · ActivityService\nChatService · ImageService"]
+    PROVIDERS --> APP["CommunityReportApp\nMaterialApp(home: AuthGate)"]
+    APP --> GATE["AuthGate\nlib/main.dart"]
+
+    GATE --> LOADING{"auth.isLoading?"}
+    LOADING -->|true| SPINNER["CircularProgressIndicator"]
+
+    LOADING -->|false| CHECK{"auth.isLoggedIn?"}
+    CHECK -->|false| WELCOME["WelcomeScreen"]
+
+    CHECK -->|true| NOTIF["init NotificationService\n(ครั้งแรกหลัง login)"]
+    NOTIF --> ROLE{"auth.role"}
+    ROLE -->|"ครู"| TEACHER["TeacherScreen 👩‍🏫"]
+    ROLE -->|"หน่วยงาน"| ORG["OrganizationScreen 🏢"]
+    ROLE -->|"นักเรียน (default)"| STUDENT["StudentScreen 🎓"]
+```
+
+`AuthService` โหลด role ที่บันทึกไว้ใน `SharedPreferences` (`user_role`) ตอนเปิดแอปใหม่ จึงข้าม WelcomeScreen/LoginScreen ไปหน้าตาม role ได้ทันทีถ้าเคย login ค้างไว้
+
+---
+
 ## Navigation Flow
 
 ```mermaid

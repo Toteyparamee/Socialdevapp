@@ -24,6 +24,8 @@ class NotificationService {
 
   /// Call once after Firebase.initializeApp() in main()
   Future<void> init({required String? jwtToken}) async {
+    if (kIsWeb) return;
+
     // 1. Register background handler
     FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 

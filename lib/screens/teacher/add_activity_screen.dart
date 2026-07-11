@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -12,6 +11,10 @@ import '../../models/activity.dart';
 import '../../services/activity_service.dart';
 import '../../services/api_config.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/app_map/app_map.dart';
+import '../../widgets/app_map/app_map_types.dart';
+import '../../models/evaluation.dart';
+import '../../widgets/evaluation/evaluation_form_editor.dart';
 
 class AddActivityScreen extends StatefulWidget {
   final Activity? editActivity;
@@ -30,13 +33,15 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
   final _supervisorCtrl = TextEditingController();
   final _supervisorPhoneCtrl = TextEditingController();
   DateTime? _date;
-  LatLng? _pickedLocation;
+  AppLatLng? _pickedLocation;
   final List<XFile> _images = [];
   List<String> _existingImageIds = [];
   bool _isSubmitting = false;
   bool _isPublic = false;
   int? _targetSchoolId; // null = ทุกโรงเรียน (organization เท่านั้น)
   List<Map<String, dynamic>> _schools = [];
+  bool _evalEnabled = false;
+  List<EvaluationQuestion> _evalQuestions = [];
 
   bool get _isEditing => widget.editActivity != null;
 
@@ -53,7 +58,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       _supervisorPhoneCtrl.text = a.supervisorPhone;
       _date = a.startAt.toLocal();
       if (a.latitude != null && a.longitude != null) {
-        _pickedLocation = LatLng(a.latitude!, a.longitude!);
+        _pickedLocation = AppLatLng(a.latitude!, a.longitude!);
       }
       _existingImageIds = List.from(a.imageIds);
       _isPublic = a.isPublic;
@@ -61,6 +66,19 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       _targetSchoolId = (sid != null && sid != 0) ? sid : null;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadSchoolsIfOrg());
+    if (_isEditing) _loadEvaluationForm();
+  }
+
+  Future<void> _loadEvaluationForm() async {
+    final form = await context.read<ActivityService>().getEvaluationForm(
+      widget.editActivity!.id,
+    );
+    if (mounted && form != null && form.questions.isNotEmpty) {
+      setState(() {
+        _evalEnabled = true;
+        _evalQuestions = form.questions;
+      });
+    }
   }
 
   Future<void> _loadSchoolsIfOrg() async {
@@ -96,11 +114,8 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
   }
 
   Future<void> _pickLocation() async {
-    // Get current location as starting point
-    LatLng initial = const LatLng(13.8200, 100.5700);
-    if (_pickedLocation != null) {
-      initial = _pickedLocation!;
-    } else {
+    AppLatLng? initial = _pickedLocation;
+    if (initial == null) {
       try {
         bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
         if (serviceEnabled) {
@@ -111,15 +126,16 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
           if (perm == LocationPermission.whileInUse ||
               perm == LocationPermission.always) {
             final pos = await Geolocator.getCurrentPosition();
-            initial = LatLng(pos.latitude, pos.longitude);
+            initial = AppLatLng(pos.latitude, pos.longitude);
           }
         }
       } catch (_) {}
     }
+    final AppLatLng startAt = initial ?? const AppLatLng(13.8200, 100.5700);
 
-    final result = await Navigator.of(context).push<LatLng>(
+    final result = await Navigator.of(context).push<AppLatLng>(
       MaterialPageRoute(
-        builder: (_) => _LocationPickerScreen(initial: initial),
+        builder: (_) => _LocationPickerScreen(initial: startAt),
       ),
     );
 
@@ -227,38 +243,52 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
     final endAt = startAt.add(const Duration(hours: 8));
     final svc = context.read<ActivityService>();
 
-    final success = _isEditing
-        ? await svc.updateActivity(
-            id: widget.editActivity!.id,
-            title: _titleCtrl.text.trim(),
-            description: _descCtrl.text.trim(),
-            location: _locationCtrl.text.trim(),
-            latitude: _pickedLocation?.latitude,
-            longitude: _pickedLocation?.longitude,
-            supervisor: _supervisorCtrl.text.trim(),
-            supervisorPhone: _supervisorPhoneCtrl.text.trim(),
-            startAt: startAt,
-            endAt: endAt,
-            maxSlots: int.tryParse(_seatsCtrl.text.trim()) ?? 30,
-            imageIds: allImageIds,
-            isPublic: _isPublic,
-            targetSchoolId: _targetSchoolId,
-          )
-        : await svc.createActivity(
-            title: _titleCtrl.text.trim(),
-            description: _descCtrl.text.trim(),
-            location: _locationCtrl.text.trim(),
-            latitude: _pickedLocation?.latitude,
-            longitude: _pickedLocation?.longitude,
-            supervisor: _supervisorCtrl.text.trim(),
-            supervisorPhone: _supervisorPhoneCtrl.text.trim(),
-            startAt: startAt,
-            endAt: endAt,
-            maxSlots: int.tryParse(_seatsCtrl.text.trim()) ?? 30,
-            imageIds: allImageIds,
-            isPublic: _isPublic,
-            targetSchoolId: _targetSchoolId,
-          );
+    String? activityId;
+    bool success;
+    if (_isEditing) {
+      activityId = widget.editActivity!.id;
+      success = await svc.updateActivity(
+        id: activityId,
+        title: _titleCtrl.text.trim(),
+        description: _descCtrl.text.trim(),
+        location: _locationCtrl.text.trim(),
+        latitude: _pickedLocation?.latitude,
+        longitude: _pickedLocation?.longitude,
+        supervisor: _supervisorCtrl.text.trim(),
+        supervisorPhone: _supervisorPhoneCtrl.text.trim(),
+        startAt: startAt,
+        endAt: endAt,
+        maxSlots: int.tryParse(_seatsCtrl.text.trim()) ?? 30,
+        imageIds: allImageIds,
+        isPublic: _isPublic,
+        targetSchoolId: _targetSchoolId,
+      );
+    } else {
+      final created = await svc.createActivity(
+        title: _titleCtrl.text.trim(),
+        description: _descCtrl.text.trim(),
+        location: _locationCtrl.text.trim(),
+        latitude: _pickedLocation?.latitude,
+        longitude: _pickedLocation?.longitude,
+        supervisor: _supervisorCtrl.text.trim(),
+        supervisorPhone: _supervisorPhoneCtrl.text.trim(),
+        startAt: startAt,
+        endAt: endAt,
+        maxSlots: int.tryParse(_seatsCtrl.text.trim()) ?? 30,
+        imageIds: allImageIds,
+        isPublic: _isPublic,
+        targetSchoolId: _targetSchoolId,
+      );
+      activityId = created?.id;
+      success = created != null;
+    }
+
+    if (success && activityId != null) {
+      await svc.saveEvaluationForm(
+        activityId,
+        _evalEnabled ? _evalQuestions : const [],
+      );
+    }
 
     if (!mounted) return;
     setState(() => _isSubmitting = false);
@@ -493,6 +523,13 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
               ),
               const SizedBox(height: 16),
               _buildVisibilitySection(context),
+              const SizedBox(height: 16),
+              EvaluationFormEditor(
+                enabled: _evalEnabled,
+                onEnabledChanged: (v) => setState(() => _evalEnabled = v),
+                questions: _evalQuestions,
+                onQuestionsChanged: (qs) => setState(() => _evalQuestions = qs),
+              ),
               const SizedBox(height: 28),
               SizedBox(
                 height: 52,
@@ -652,7 +689,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
 }
 
 class _LocationPickerScreen extends StatefulWidget {
-  final LatLng initial;
+  final AppLatLng initial;
   const _LocationPickerScreen({required this.initial});
 
   @override
@@ -660,7 +697,7 @@ class _LocationPickerScreen extends StatefulWidget {
 }
 
 class _LocationPickerScreenState extends State<_LocationPickerScreen> {
-  late LatLng _selected;
+  late AppLatLng _selected;
 
   @override
   void initState() {
@@ -692,23 +729,17 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
       ),
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: widget.initial,
-              zoom: 15,
-            ),
-            markers: {
-              Marker(
-                markerId: const MarkerId('picked'),
+          AppMap(
+            initialCenter: widget.initial,
+            initialZoom: 15,
+            markers: [
+              AppMarker(
+                id: 'picked',
                 position: _selected,
-                icon: BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueAzure,
-                ),
+                hue: 210, // azure
               ),
-            },
+            ],
             myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            zoomControlsEnabled: false,
             onTap: (pos) => setState(() => _selected = pos),
           ),
           // Hint at top

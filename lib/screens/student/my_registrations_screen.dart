@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,6 +6,10 @@ import '../../theme/app_theme.dart';
 import '../../models/activity.dart';
 import '../../services/activity_service.dart';
 import '../../widgets/chat_screen.dart';
+import '../../widgets/evaluation/evaluation_form_dialog.dart';
+import '../../widgets/app_map/app_map.dart';
+import '../../widgets/app_map/app_map_controller.dart';
+import '../../widgets/app_map/app_map_types.dart';
 
 // ══════════════════════════════════════════════
 // หน้า List รายการที่ลงทะเบียน
@@ -283,21 +286,46 @@ class _RegistrationDetailScreen extends StatefulWidget {
 }
 
 class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
-  GoogleMapController? _mapController;
+  final AppMapController _mapController = AppMapController(initialZoom: 16);
   double _currentZoom = 16;
   final List<PlatformFile> _attachedFiles = [];
+  final _descriptionController = TextEditingController();
+
+  Submission? _submission;
+  bool _isLoadingSubmission = true;
+  bool _isEditingSubmission = false;
 
   Registration get reg => widget.registration;
   Activity? get activity => widget.activity;
+  bool get _hasSubmitted => _submission != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubmission();
+  }
+
+  Future<void> _loadSubmission() async {
+    if (reg.status == 'registered') {
+      setState(() => _isLoadingSubmission = false);
+      return;
+    }
+    final sub = await context.read<ActivityService>().getMySubmission(reg.id);
+    if (!mounted) return;
+    setState(() {
+      _submission = sub;
+      _isLoadingSubmission = false;
+    });
+  }
 
   void _zoomIn() {
     _currentZoom = (_currentZoom + 1).clamp(1, 20);
-    _mapController?.animateCamera(CameraUpdate.zoomTo(_currentZoom));
+    _mapController.setZoom(_currentZoom);
   }
 
   void _zoomOut() {
     _currentZoom = (_currentZoom - 1).clamp(1, 20);
-    _mapController?.animateCamera(CameraUpdate.zoomTo(_currentZoom));
+    _mapController.setZoom(_currentZoom);
   }
 
   Future<void> _openGoogleMaps(double lat, double lng) async {
@@ -305,7 +333,26 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  Future<void> _pickFiles() async {
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImages() async {
+    final result = await FilePicker.pickFiles(
+      allowMultiple: true,
+      type: FileType.image,
+    );
+
+    if (result != null) {
+      setState(() {
+        _attachedFiles.addAll(result.files);
+      });
+    }
+  }
+
+  Future<void> _pickDocuments() async {
     final result = await FilePicker.pickFiles(
       allowMultiple: true,
       type: FileType.custom,
@@ -328,6 +375,7 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
       'pdf' => Icons.picture_as_pdf_rounded,
       'doc' || 'docx' => Icons.description_rounded,
       'xls' || 'xlsx' => Icons.table_chart_rounded,
+      'jpg' || 'jpeg' || 'png' || 'webp' || 'gif' => Icons.image_rounded,
       _ => Icons.insert_drive_file_rounded,
     };
   }
@@ -337,6 +385,7 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
       'pdf' => const Color(0xFFEF4444),
       'doc' || 'docx' => const Color(0xFF3B82F6),
       'xls' || 'xlsx' => const Color(0xFF10B981),
+      'jpg' || 'jpeg' || 'png' || 'webp' || 'gif' => const Color(0xFF8B5CF6),
       _ => const Color(0xFF6B7280),
     };
   }
@@ -359,15 +408,27 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
       return;
     }
 
+    final description = _descriptionController.text.trim();
+    if (description.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณากรอกรายละเอียดการทำงาน'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     final title = activity?.title ?? 'กิจกรรม';
+    final isEdit = _hasSubmitted;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'ยืนยันส่งงาน',
-          style: TextStyle(fontWeight: FontWeight.w700),
+        title: Text(
+          isEdit ? 'ยืนยันแก้ไขงานที่ส่ง' : 'ยืนยันส่งงาน',
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         content: Text(
           'ส่งไฟล์ทั้งหมด ${_attachedFiles.length} ไฟล์\nสำหรับกิจกรรม "$title"',
@@ -385,20 +446,45 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
               Navigator.pop(ctx);
 
               final fileNames = _attachedFiles.map((f) => f.name).join(', ');
-              await context.read<ActivityService>().submitWork(
-                reg.id,
-                content: 'ส่งไฟล์: $fileNames',
-              );
+              final success = await context
+                  .read<ActivityService>()
+                  .submitWork(
+                    reg.id,
+                    content: '$description\n\nส่งไฟล์: $fileNames',
+                  );
 
               if (!mounted) return;
+
+              if (!success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('ส่งงานไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'),
+                    behavior: SnackBarBehavior.floating,
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('ส่งงานสำเร็จ!'),
+                SnackBar(
+                  content: Text(isEdit ? 'บันทึกการแก้ไขสำเร็จ!' : 'ส่งงานสำเร็จ!'),
                   behavior: SnackBarBehavior.floating,
-                  backgroundColor: Color(0xFF10B981),
+                  backgroundColor: const Color(0xFF10B981),
                 ),
               );
-              setState(() => _attachedFiles.clear());
+
+              final sub = await context.read<ActivityService>().getMySubmission(
+                reg.id,
+              );
+              if (!mounted) return;
+              setState(() {
+                _submission = sub;
+                _isEditingSubmission = false;
+                _attachedFiles.clear();
+                _descriptionController.clear();
+              });
+              if (!isEdit) _maybeShowEvaluationForm();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primary,
@@ -406,9 +492,40 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            child: const Text('ส่งงาน'),
+            child: Text(isEdit ? 'บันทึกการแก้ไข' : 'ส่งงาน'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _enterEditMode() {
+    setState(() {
+      _isEditingSubmission = true;
+      _descriptionController.text = _submission?.content ?? '';
+    });
+  }
+
+  Future<void> _maybeShowEvaluationForm() async {
+    final activityId = activity?.id;
+    if (activityId == null || activityId.isEmpty) return;
+
+    final form = await context.read<ActivityService>().getEvaluationForm(
+      activityId,
+    );
+    if (!mounted || form == null || form.questions.isEmpty) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => EvaluationFormDialog(
+        activityId: activityId,
+        registrationId: reg.id,
+        questions: form.questions,
       ),
     );
   }
@@ -599,25 +716,17 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
                   height: 200,
                   child: Stack(
                     children: [
-                      GoogleMap(
-                        initialCameraPosition: CameraPosition(
-                          target: LatLng(lat, lng),
-                          zoom: 16,
-                        ),
-                        onMapCreated: (c) => _mapController = c,
-                        markers: {
-                          Marker(
-                            markerId: const MarkerId('reg_location'),
-                            position: LatLng(lat, lng),
-                            infoWindow: InfoWindow(title: title),
+                      AppMap(
+                        initialCenter: AppLatLng(lat, lng),
+                        initialZoom: 16,
+                        controller: _mapController,
+                        markers: [
+                          AppMarker(
+                            id: 'reg_location',
+                            position: AppLatLng(lat, lng),
+                            title: title,
                           ),
-                        },
-                        zoomControlsEnabled: false,
-                        zoomGesturesEnabled: true,
-                        scrollGesturesEnabled: true,
-                        rotateGesturesEnabled: false,
-                        tiltGesturesEnabled: false,
-                        myLocationButtonEnabled: false,
+                        ],
                       ),
                       Positioned(
                         right: 10,
@@ -664,160 +773,210 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
             _buildSection('ส่งงาน'),
             const SizedBox(height: 12),
 
-            // Pick file button
-            GestureDetector(
-              onTap: _pickFiles,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: AppTheme.primary.withValues(alpha: 0.3),
-                    width: 1.5,
-                    strokeAlign: BorderSide.strokeAlignInside,
-                  ),
+            if (_isLoadingSubmission)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: CircularProgressIndicator(),
                 ),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.cloud_upload_rounded,
-                      size: 36,
-                      color: AppTheme.primary,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'แตะเพื่อเลือกไฟล์',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'รองรับ PDF, Word, Excel',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                  ],
+              )
+            else if (_hasSubmitted && !_isEditingSubmission) ...[
+              _buildSubmittedCard(),
+              const SizedBox(height: 16),
+            ] else ...[
+              // Description field
+              Text(
+                'รายละเอียดการทำงาน',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
                 ),
               ),
-            ),
-
-            // File list
-            if (_attachedFiles.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              ...List.generate(_attachedFiles.length, (i) {
-                final file = _attachedFiles[i];
-                final ext = file.extension;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF9FAFB),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _descriptionController,
+                maxLines: 4,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppTheme.textPrimary,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'อธิบายรายละเอียดงานที่ทำ...',
+                  hintStyle: TextStyle(color: Colors.grey.shade400),
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE8ECF0)),
+                    borderSide: const BorderSide(color: Color(0xFFE8ECF0)),
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: _fileColor(ext).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          _fileIcon(ext),
-                          size: 22,
-                          color: _fileColor(ext),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              file.name,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.textPrimary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${ext?.toUpperCase() ?? ''} • ${_formatSize(file.size)}',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => _removeFile(i),
-                        child: Container(
-                          width: 32,
-                          height: 32,
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE8ECF0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppTheme.primary, width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.all(14),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Pick file buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildPickTile(
+                      icon: Icons.image_outlined,
+                      label: 'รูปภาพ',
+                      hint: 'JPG, PNG',
+                      onTap: _pickImages,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildPickTile(
+                      icon: Icons.description_outlined,
+                      label: 'ไฟล์เอกสาร',
+                      hint: 'PDF, Word, Excel',
+                      onTap: _pickDocuments,
+                    ),
+                  ),
+                ],
+              ),
+
+              // File list
+              if (_attachedFiles.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                ...List.generate(_attachedFiles.length, (i) {
+                  final file = _attachedFiles[i];
+                  final ext = file.extension;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE8ECF0)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
                           decoration: BoxDecoration(
-                            color: Colors.red.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(8),
+                            color: _fileColor(ext).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            size: 18,
-                            color: Colors.red,
+                          child: Icon(
+                            _fileIcon(ext),
+                            size: 22,
+                            color: _fileColor(ext),
                           ),
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                file.name,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${ext?.toUpperCase() ?? ''} • ${_formatSize(file.size)}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => _removeFile(i),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 18,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+              const SizedBox(height: 24),
+
+              // Submit button
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.buttonGradient,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primary.withValues(alpha: 0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
-                );
-              }),
-            ],
-            const SizedBox(height: 24),
-
-            // Submit button
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: AppTheme.buttonGradient,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                  child: ElevatedButton.icon(
+                    onPressed: _handleSubmit,
+                    icon: const Icon(Icons.send_rounded, size: 20),
+                    label: Text(
+                      _isEditingSubmission ? 'บันทึกการแก้ไข' : 'ส่งงาน',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ],
-                ),
-                child: ElevatedButton.icon(
-                  onPressed: _handleSubmit,
-                  icon: const Icon(Icons.send_rounded, size: 20),
-                  label: const Text(
-                    'ส่งงาน',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+              if (_isEditingSubmission) ...[
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _isEditingSubmission = false;
+                      _attachedFiles.clear();
+                      _descriptionController.clear();
+                    });
+                  },
+                  child: Text(
+                    'ยกเลิกการแก้ไข',
+                    style: TextStyle(color: Colors.grey.shade500),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
+            ],
             const SizedBox(height: 16),
 
             // Unregister button
@@ -841,6 +1000,120 @@ class _RegistrationDetailScreenState extends State<_RegistrationDetailScreen> {
               ),
             ),
             const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubmittedCard() {
+    final sub = _submission;
+    final canEdit = sub == null || sub.status != 'passed';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF10B981).withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Color(0xFF10B981),
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'ส่งงานสำเร็จแล้ว',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (sub != null && sub.content.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              sub.content,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.5,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+          if (canEdit) ...[
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: _enterEditMode,
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('แก้ไขงานที่ส่ง'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.primary,
+                side: const BorderSide(color: AppTheme.primary),
+                minimumSize: const Size(double.infinity, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Text(
+              'งานนี้ผ่านการตรวจแล้ว ไม่สามารถแก้ไขได้',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPickTile({
+    required IconData icon,
+    required String label,
+    required String hint,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppTheme.primary.withValues(alpha: 0.3),
+            width: 1.5,
+            strokeAlign: BorderSide.strokeAlignInside,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 32, color: AppTheme.primary),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              hint,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+            ),
           ],
         ),
       ),

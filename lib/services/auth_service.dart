@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_appauth/flutter_appauth.dart';
+import 'package:auth0_flutter/auth0_flutter_web.dart';
 import 'api_config.dart';
 
 class AuthService extends ChangeNotifier {
@@ -20,11 +21,19 @@ class AuthService extends ChangeNotifier {
 
   // ── Config ──
   static String get _baseUrl => ApiConfig.loginUrl;
+
+  // Mobile (native Auth0 app, used via flutter_appauth)
   static const String _auth0Domain = 'dev-p6m40iaxhz0i543y.us.auth0.com';
   static const String _auth0ClientId = 'aBJe4HwBKfZ98XiWgfVKios2UrGx6PU3';
   static const String _auth0RedirectUri = 'com.socialdev.app://login-callback';
 
+  // Web (SPA Auth0 app, used via auth0_flutter_web)
+  static const String _auth0WebDomain = 'dev-6vcndxrhue17kyb0.us.auth0.com';
+  static const String _auth0WebClientId = 'lXXN3MWbCmhskHpVW2UM4hX7jdevnLtU';
+
   final FlutterAppAuth _appAuth = const FlutterAppAuth();
+  final Auth0Web _auth0Web = Auth0Web(_auth0WebDomain, _auth0WebClientId);
+  Future<void>? _auth0WebReady;
 
   bool _isLoggedIn = false;
   String? _username;
@@ -50,6 +59,9 @@ class AuthService extends ChangeNotifier {
 
   AuthService() {
     _loadSession();
+    if (kIsWeb) {
+      _auth0WebReady = _auth0Web.onLoad();
+    }
   }
 
   Future<void> _loadSession() async {
@@ -175,6 +187,50 @@ class AuthService extends ChangeNotifier {
 
   // ── Login with Google (ผ่าน Auth0) ──
   Future<void> loginWithGoogle({String role = 'นักเรียน'}) async {
+    final String? accessToken;
+
+    if (kIsWeb) {
+      accessToken = await _loginWithGoogleWeb();
+    } else {
+      accessToken = await _loginWithGoogleNative();
+    }
+
+    if (accessToken == null) {
+      throw AuthException('Google login ถูกยกเลิก');
+    }
+
+    final response = await http
+        .post(
+          Uri.parse('$_baseUrl/auth/google'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'access_token': accessToken,
+            'role': role,
+            'platform': kIsWeb ? 'web' : 'mobile',
+          }),
+        )
+        .timeout(_timeout);
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      await _saveSession(
+        username: data['user']['username'],
+        email: data['user']['email'] as String?,
+        role: data['user']['role'],
+        token: data['token'],
+        avatarUrl: data['user']['avatar_url'],
+        userId: data['user']['id']?.toString(),
+        schoolId: data['user']['school_id'] is int ? data['user']['school_id'] as int : int.tryParse(data['user']['school_id']?.toString() ?? ''),
+        schoolName: (data['school_name'] as String?)?.isNotEmpty == true ? data['school_name'] as String : data['user']['school_name'] as String?,
+      );
+    } else {
+      final data = jsonDecode(response.body);
+      throw AuthException(data['error'] ?? 'Google login ไม่สำเร็จ');
+    }
+  }
+
+  // Google login บน native (Android/iOS) ผ่าน flutter_appauth
+  Future<String?> _loginWithGoogleNative() async {
     final AuthorizationTokenResponse result;
     try {
       result = await _appAuth
@@ -198,34 +254,24 @@ class AuthService extends ChangeNotifier {
       }
       throw AuthException('Google login ไม่สำเร็จ: ${e.message}');
     }
+    return result.accessToken;
+  }
 
-    if (result.accessToken == null) {
-      throw AuthException('Google login ถูกยกเลิก');
-    }
-
-    final response = await http
-        .post(
-          Uri.parse('$_baseUrl/auth/google'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'access_token': result.accessToken, 'role': role}),
-        )
-        .timeout(_timeout);
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      await _saveSession(
-        username: data['user']['username'],
-        email: data['user']['email'] as String?,
-        role: data['user']['role'],
-        token: data['token'],
-        avatarUrl: data['user']['avatar_url'],
-        userId: data['user']['id']?.toString(),
-        schoolId: data['user']['school_id'] is int ? data['user']['school_id'] as int : int.tryParse(data['user']['school_id']?.toString() ?? ''),
-        schoolName: (data['school_name'] as String?)?.isNotEmpty == true ? data['school_name'] as String : data['user']['school_name'] as String?,
-      );
-    } else {
-      final data = jsonDecode(response.body);
-      throw AuthException(data['error'] ?? 'Google login ไม่สำเร็จ');
+  // Google login บน web ผ่าน auth0_flutter (popup-based Universal Login)
+  Future<String?> _loginWithGoogleWeb() async {
+    try {
+      await _auth0WebReady;
+      final credentials = await _auth0Web
+          .loginWithPopup(
+            scopes: {'openid', 'profile', 'email'},
+            parameters: {'connection': 'google-oauth2'},
+          )
+          .timeout(const Duration(seconds: 60));
+      return credentials.accessToken;
+    } on TimeoutException {
+      throw AuthException('Google login หมดเวลา กรุณาลองใหม่');
+    } on WebException catch (e) {
+      throw AuthException('Google login ไม่สำเร็จ: ${e.message}');
     }
   }
 

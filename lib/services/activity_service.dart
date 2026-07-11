@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'api_config.dart';
 import 'auth_service.dart';
 import '../models/activity.dart';
+import '../models/evaluation.dart';
 
 class ActivityService extends ChangeNotifier {
   final AuthService _auth;
@@ -59,7 +60,7 @@ class ActivityService extends ChangeNotifier {
     return null;
   }
 
-  Future<bool> createActivity({
+  Future<Activity?> createActivity({
     required String title,
     required String description,
     required String location,
@@ -101,7 +102,7 @@ class ActivityService extends ChangeNotifier {
 
       if (response.statusCode == 201) {
         await fetchActivities();
-        return true;
+        return Activity.fromJson(jsonDecode(response.body));
       } else {
         debugPrint(
           'createActivity failed: ${response.statusCode} ${response.body}',
@@ -110,7 +111,7 @@ class ActivityService extends ChangeNotifier {
     } catch (e) {
       debugPrint('createActivity error: $e');
     }
-    return false;
+    return null;
   }
 
   Future<void> fetchMyRegistrations() async {
@@ -248,9 +249,25 @@ class ActivityService extends ChangeNotifier {
           )
           .timeout(_timeout);
 
-      return response.statusCode == 201;
+      return response.statusCode == 201 || response.statusCode == 200;
     } catch (_) {}
     return false;
+  }
+
+  Future<Submission?> getMySubmission(String registrationId) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/registrations/$registrationId/submission'),
+            headers: _auth.authHeaders,
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        return Submission.fromJson(jsonDecode(response.body));
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<bool> reviewSubmission(
@@ -294,6 +311,73 @@ class ActivityService extends ChangeNotifier {
       debugPrint('fetchMyActivitySubmissions error: $e');
     }
     return [];
+  }
+
+  Future<EvaluationForm?> getEvaluationForm(String activityId) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/$activityId/evaluation-form'),
+            headers: _auth.authHeaders,
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        return EvaluationForm.fromJson(jsonDecode(response.body));
+      }
+    } catch (e) {
+      debugPrint('getEvaluationForm error: $e');
+    }
+    return null;
+  }
+
+  Future<bool> saveEvaluationForm(
+    String activityId,
+    List<EvaluationQuestion> questions,
+  ) async {
+    try {
+      final response = await http
+          .put(
+            Uri.parse('$_baseUrl/$activityId/evaluation-form'),
+            headers: _auth.authHeaders,
+            body: jsonEncode({
+              'questions': questions.map((q) => q.toJson()).toList(),
+            }),
+          )
+          .timeout(_timeout);
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('saveEvaluationForm error: $e');
+    }
+    return false;
+  }
+
+  Future<EvaluationSubmitResult> submitEvaluationResponse(
+    String activityId, {
+    required String registrationId,
+    required List<EvaluationAnswer> answers,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/$activityId/evaluation-response'),
+            headers: _auth.authHeaders,
+            body: jsonEncode({
+              'registration_id': registrationId,
+              'answers': answers.map((a) => a.toJson()).toList(),
+            }),
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 201) return EvaluationSubmitResult.success;
+      if (response.statusCode == 409) {
+        return EvaluationSubmitResult.alreadySubmitted;
+      }
+    } catch (e) {
+      debugPrint('submitEvaluationResponse error: $e');
+    }
+    return EvaluationSubmitResult.error;
   }
 }
 
